@@ -83,8 +83,13 @@ def _title_key(title: str) -> str:
     return " ".join(_NON_WORD_RE.sub(" ", title.lower()).split())
 
 
-def merge_news(groups: list[list[NewsItem]], limit: int | None = None) -> list[NewsItem]:
-    """Combine items from several feeds: drop duplicates (same link or same title), newest first."""
+def merge_news(
+    groups: list[list[NewsItem]], limit: int | None = None, max_per_source: int | None = None
+) -> list[NewsItem]:
+    """Combine items from several feeds: drop duplicates (same link or same title), newest first.
+
+    max_per_source keeps the newest N items from each source, so one busy feed can't crowd out the rest.
+    """
     seen_links: set[str] = set()
     seen_titles: set[str] = set()
     merged: list[NewsItem] = []
@@ -100,6 +105,14 @@ def merge_news(groups: list[list[NewsItem]], limit: int | None = None) -> list[N
 
     oldest = datetime.min.replace(tzinfo=timezone.utc)
     merged.sort(key=lambda i: i.published or oldest, reverse=True)
+    if max_per_source:
+        per_source: dict[str, int] = {}
+        capped = []
+        for item in merged:
+            per_source[item.source] = per_source.get(item.source, 0) + 1
+            if per_source[item.source] <= max_per_source:
+                capped.append(item)
+        merged = capped
     return merged[:limit] if limit else merged
 
 
@@ -114,6 +127,11 @@ async def fetch_feed(client: httpx.AsyncClient, feed: Feed) -> list[NewsItem]:
     return parse_feed(resp.content, feed.source)
 
 
-async def fetch_all(client: httpx.AsyncClient, feeds: tuple[Feed, ...] | list[Feed], limit: int | None = None) -> list[NewsItem]:
+async def fetch_all(
+    client: httpx.AsyncClient,
+    feeds: tuple[Feed, ...] | list[Feed],
+    limit: int | None = None,
+    max_per_source: int | None = None,
+) -> list[NewsItem]:
     groups = await asyncio.gather(*(fetch_feed(client, f) for f in feeds))
-    return merge_news(list(groups), limit=limit)
+    return merge_news(list(groups), limit=limit, max_per_source=max_per_source)

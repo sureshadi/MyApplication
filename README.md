@@ -23,6 +23,7 @@ Open http://127.0.0.1:8000.
 | --- | --- | --- |
 | `FINNHUB_API_KEY` | unset | If set, quotes come from [Finnhub](https://finnhub.io) (free key). Otherwise Yahoo Finance's public chart endpoint is used. |
 | `CACHE_TTL_SECONDS` | `300` | How long news and quotes are cached in memory. |
+| `MAX_ITEMS_PER_SOURCE` | `12` | Most headlines any one outlet can take on the front page, so busy feeds don't crowd out the rest. |
 | `HTTP_TIMEOUT_SECONDS` | `10` | Timeout for each outside request. |
 
 News feeds are listed in `app/config.py`.

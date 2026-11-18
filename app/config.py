@@ -36,6 +36,8 @@ class Settings:
     cache_ttl_seconds: int = field(default_factory=lambda: int(os.getenv("CACHE_TTL_SECONDS", "300")))
     http_timeout_seconds: float = field(default_factory=lambda: float(os.getenv("HTTP_TIMEOUT_SECONDS", "10")))
     max_front_page_items: int = 60
+    # Keeps a balanced mix: no single outlet can fill more than this many front-page slots.
+    max_items_per_source: int = field(default_factory=lambda: int(os.getenv("MAX_ITEMS_PER_SOURCE", "12")))
 
 
 def get_settings() -> Settings:
