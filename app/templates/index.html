@@ -1,12 +1,46 @@
 {% extends "base.html" %}
+{% block title %}{% if active_source %}{{ active_source.source }} · {% endif %}Market Headlines{% endblock %}
 {% block content %}
-{% if request.query_params.get('error') == 'invalid' %}
-<p class="alert" data-testid="invalid-symbol">"{{ request.query_params.get('symbol', '') }}" is not a valid ticker symbol.</p>
-{% endif %}
-<div class="page-head">
-  <h1>Latest financial news</h1>
-  <p class="subtitle">Top stories from the Wall Street Journal, New York Times, CNBC and Financial Times, updated every few minutes.</p>
+<div class="layout">
+  <aside class="sidebar" aria-label="News sources" data-testid="source-sidebar">
+    <p class="sidebar-title">Sources</p>
+    <nav class="source-list">
+      <a href="/" class="source-link{% if not active_source %} active{% endif %}" data-testid="source-link" data-slug="all"
+         {% if not active_source %}aria-current="page"{% endif %}>
+        <span class="source-icon all" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="16" height="16"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>
+        </span>
+        <span class="source-name">All sources</span>
+        <span class="source-count">{{ total_count }}</span>
+      </a>
+      {% for s in sources %}
+      {% set is_active = active_source and active_source.slug == s.slug %}
+      <a href="/?source={{ s.slug }}" class="source-link{% if is_active %} active{% endif %}" data-testid="source-link" data-slug="{{ s.slug }}"
+         data-source="{{ s.name }}"{% if is_active %} aria-current="page"{% endif %}>
+        <span class="source-icon" data-source="{{ s.name }}" aria-hidden="true">{{ s.label[:4] }}</span>
+        <span class="source-name">{{ s.name }}</span>
+        <span class="source-count">{{ s.count }}</span>
+      </a>
+      {% endfor %}
+    </nav>
+    <p class="sidebar-note">Headlines refresh every few minutes.</p>
+  </aside>
+
+  <section class="feed">
+    {% if request.query_params.get('error') == 'invalid' %}
+    <p class="alert" data-testid="invalid-symbol">"{{ request.query_params.get('symbol', '') }}" is not a valid ticker symbol.</p>
+    {% endif %}
+    <div class="page-head">
+      {% if active_source %}
+      <h1 data-testid="feed-heading">Latest from {{ active_source.source }}</h1>
+      <p class="subtitle">The newest headlines from {{ active_source.source }}.</p>
+      {% else %}
+      <h1 data-testid="feed-heading">Latest financial news</h1>
+      <p class="subtitle">Top stories from {% for s in sources %}{% if not loop.first %}{% if loop.last %} and {% else %}, {% endif %}{% endif %}{{ s.name }}{% endfor %}, updated every few minutes.</p>
+      {% endif %}
+    </div>
+    {% set feature_first = True %}
+    {% include "_news_list.html" %}
+  </section>
 </div>
-{% set feature_first = True %}
-{% include "_news_list.html" %}
 {% endblock %}

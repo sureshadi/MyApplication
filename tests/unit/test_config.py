@@ -14,3 +14,16 @@ def test_watchlist_from_env_is_normalized(monkeypatch):
 
 def test_front_page_sources_are_wsj_nyt_cnbc_ft():
     assert {f.source for f in Settings().feeds} == {"Wall Street Journal", "New York Times", "CNBC", "Financial Times"}
+
+
+def test_feed_label_and_slug():
+    from app.config import Feed
+
+    assert Feed("Wall Street Journal", "u", "WSJ").slug == "wsj"
+    assert Feed("Wall Street Journal", "u", "WSJ").label == "WSJ"
+    assert Feed("Financial Times", "u").slug == "financial-times"
+    assert Feed("Financial Times", "u").label == "Financial Times"
+
+
+def test_default_feed_slugs_for_sidebar():
+    assert [f.slug for f in Settings().feeds] == ["wsj", "nyt", "cnbc", "ft"]

@@ -31,7 +31,7 @@ class TestNewsApi:
         mock_http.get(CNBC_URL).respond(500)
         mock_http.get("https://feeds.test/marketwatch.xml").respond(500)
         with TestClient(create_app(make_settings())) as c:
-            assert c.get("/api/news").json() == {"count": 0, "items": []}
+            assert c.get("/api/news").json() == {"count": 0, "source": None, "items": []}
 
 
 class TestTickerApi:

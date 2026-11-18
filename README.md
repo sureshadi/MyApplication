@@ -3,6 +3,7 @@
 A small web app that:
 
 - shows the latest financial news from major outlets (Wall Street Journal, New York Times, CNBC, Financial Times) on the front page, merged, de-duplicated and sorted newest first
+- has a left sidebar to pick one news source (WSJ, NYT, CNBC, FT) or all of them; on phones it becomes a row of pills
 - has a top ticker bar with live prices for AAPL, META, NVDA, AMAT, AVGO, LLY, GOOGL and MSFT. Visitors can add tickers with **+** and remove them with **×**; their list is saved in their browser
 - given a ticker symbol (for example `AAPL`), shows the current quote, the change on the day, a one-month price chart and related headlines
 
@@ -44,10 +45,11 @@ News feeds are listed in `app/config.py`.
 
 | Path | Description |
 | --- | --- |
-| `/` | Front page with the latest headlines |
+| `/` | Front page with the latest headlines (`/?source=wsj` shows one source) |
 | `/ticker/{symbol}` | Quote and related news for a ticker |
 | `/search?symbol=aapl` | Redirects to the ticker page |
-| `/api/news` | Headlines as JSON |
+| `/api/news` | Headlines as JSON (`?source=cnbc` filters; unknown source is 404) |
+| `/api/sources` | Sidebar sources with headline counts |
 | `/api/quotes?symbols=AAPL,MSFT` | Quotes for the ticker bar (defaults to `WATCHLIST`). Unknown symbols come back with `"error": "not_found"` |
 | `/api/ticker/{symbol}` | Quote and news as JSON (400 invalid, 404 unknown, 503 provider down) |
 | `/healthz` | Health check |
