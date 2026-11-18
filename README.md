@@ -7,6 +7,16 @@ A small web app that:
 
 Built with FastAPI, Jinja templates, httpx and feedparser.
 
+## Put it online
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/sureshadi/MyApplication)
+
+Click the button, sign in to Render (GitHub sign-in works), and click **Deploy Blueprint**. Render reads `render.yaml`, builds the app and gives you a public URL like `https://market-headlines.onrender.com`. It redeploys automatically on every push to `main`.
+
+On the free plan the site sleeps after about 15 minutes without visitors, so the first visit after that takes up to a minute to load.
+
+A `Dockerfile` is also included for Docker-based hosts (Fly.io, Railway, Google Cloud Run).
+
 ## Run it locally
 
 ```bash
