@@ -144,6 +144,67 @@ main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 8px; }
 .add-cancel { padding: 8px 12px; border-radius: 10px; border: 1px solid var(--border); background: transparent; color: var(--muted); font: inherit; cursor: pointer; }
 .add-error { color: var(--down); font-size: .85rem; font-weight: 500; }
 
+/* ---------- Layout with source sidebar ---------- */
+.layout { display: grid; grid-template-columns: 248px minmax(0, 1fr); gap: 28px; align-items: start; }
+.sidebar {
+  position: sticky; top: 140px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 18px;
+  padding: 18px 12px 14px; box-shadow: var(--shadow);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
+.sidebar-title {
+  margin: 0 10px 10px; font-size: .72rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+}
+.source-list { display: flex; flex-direction: column; gap: 4px; }
+.source-link {
+  position: relative; display: flex; align-items: center; gap: 12px;
+  padding: 9px 10px; border-radius: 12px; text-decoration: none; font-weight: 600; font-size: .92rem;
+  color: var(--fg); transition: background .15s, transform .15s;
+}
+.source-link:hover { background: var(--surface-hover); transform: translateX(2px); }
+.source-link.active { background: color-mix(in srgb, var(--src, var(--accent)) 14%, transparent); }
+.source-link.active::before {
+  content: ""; position: absolute; left: -12px; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0;
+  background: var(--src, var(--gradient));
+}
+.source-link[data-source="Wall Street Journal"], .source-icon[data-source="Wall Street Journal"] { --src: #f59e0b; }
+.source-link[data-source="New York Times"], .source-icon[data-source="New York Times"] { --src: #94a3b8; }
+.source-link[data-source="CNBC"], .source-icon[data-source="CNBC"] { --src: #38bdf8; }
+.source-link[data-source="Financial Times"], .source-icon[data-source="Financial Times"] { --src: #fb7185; }
+.source-link[data-source="Yahoo Finance"], .source-icon[data-source="Yahoo Finance"] { --src: #a78bfa; }
+.source-link[data-source="MarketWatch"], .source-icon[data-source="MarketWatch"] { --src: #34d399; }
+.source-icon {
+  flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px;
+  font-size: .62rem; font-weight: 800; letter-spacing: .02em;
+  color: var(--src, var(--accent)); background: color-mix(in srgb, var(--src, var(--accent)) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--src, var(--accent)) 30%, transparent);
+}
+.source-icon.all { background: var(--gradient); color: #fff; border: 0; }
+.source-icon.all svg { fill: currentColor; opacity: .95; }
+.source-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.source-count {
+  font-size: .72rem; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums;
+  padding: 2px 8px; border-radius: 999px; background: var(--surface-solid); border: 1px solid var(--border);
+}
+.source-link.active .source-count { color: var(--fg); border-color: var(--border-strong); }
+.sidebar-note { margin: 14px 10px 0; font-size: .75rem; color: var(--muted); }
+.feed .page-head { margin-top: 0; }
+.feed .news-list { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+
+@media (max-width: 860px) {
+  .layout { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .sidebar { position: static; padding: 0; background: none; border: 0; box-shadow: none; backdrop-filter: none; }
+  .sidebar-title, .sidebar-note { display: none; }
+  .source-list { flex-direction: row; overflow-x: auto; scrollbar-width: none; gap: 8px; padding: 2px; }
+  .source-list::-webkit-scrollbar { display: none; }
+  .source-link { flex: none; padding: 6px 12px 6px 6px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface-solid); }
+  .source-link:hover { transform: none; }
+  .source-link.active { border-color: var(--src, var(--accent)); }
+  .source-link.active::before { display: none; }
+  .source-icon { width: 26px; height: 26px; border-radius: 999px; font-size: .55rem; }
+  .source-name { overflow: visible; }
+}
+
 /* ---------- Page heading ---------- */
 .page-head { margin: 8px 0 18px; }
 h1 { font-size: clamp(1.6rem, 3vw, 2.2rem); line-height: 1.15; letter-spacing: -.03em; margin: 0 0 6px; font-weight: 800; }

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass, field
 
 
@@ -10,15 +11,25 @@ from dataclasses import dataclass, field
 class Feed:
     source: str
     url: str
+    short: str = ""  # short label for the sidebar, e.g. "WSJ"
+
+    @property
+    def label(self) -> str:
+        return self.short or self.source
+
+    @property
+    def slug(self) -> str:
+        """URL-safe id used in ?source=, e.g. "wsj"."""
+        return re.sub(r"[^a-z0-9]+", "-", self.label.lower()).strip("-")
 
 
 # Public RSS feeds from major financial news outlets shown on the front page.
 # Yahoo Finance and MarketWatch are left out for now.
 DEFAULT_FEEDS: tuple[Feed, ...] = (
-    Feed("CNBC", "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664"),
-    Feed("Wall Street Journal", "https://feeds.content.dowjones.io/public/rss/RSSMarketsMain"),
-    Feed("New York Times", "https://rss.nytimes.com/services/xml/rss/nyt/Business.xml"),
-    Feed("Financial Times", "https://www.ft.com/markets?format=rss"),
+    Feed("Wall Street Journal", "https://feeds.content.dowjones.io/public/rss/RSSMarketsMain", "WSJ"),
+    Feed("New York Times", "https://rss.nytimes.com/services/xml/rss/nyt/Business.xml", "NYT"),
+    Feed("CNBC", "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664", "CNBC"),
+    Feed("Financial Times", "https://www.ft.com/markets?format=rss", "FT"),
 )
 
 # Per-ticker headlines. {symbol} is replaced with the ticker.
@@ -41,6 +52,8 @@ class Settings:
     cache_ttl_seconds: int = field(default_factory=lambda: int(os.getenv("CACHE_TTL_SECONDS", "300")))
     http_timeout_seconds: float = field(default_factory=lambda: float(os.getenv("HTTP_TIMEOUT_SECONDS", "10")))
     max_front_page_items: int = 60
+    # How many headlines to show when the reader picks a single source in the sidebar.
+    max_items_single_source: int = 40
     # Tickers shown in the top bar by default. Visitors can add or remove their own.
     watchlist: tuple[str, ...] = field(default_factory=_watchlist_from_env)
     max_quote_symbols: int = 25

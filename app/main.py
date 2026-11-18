@@ -36,19 +36,46 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     templates = Jinja2Templates(directory=BASE_DIR / "templates")
     templates.env.globals["watchlist"] = list(settings.watchlist)
 
-    async def front_page_news(request: Request) -> list[news.NewsItem]:
+    async def all_news(request: Request) -> list[news.NewsItem]:
+        """Every headline from every front-page feed, de-duplicated and newest first (cached)."""
         cache: TTLCache = request.app.state.cache
-        items = cache.get("front_page")
+        items = cache.get("all_news")
         if items is None:
-            items = await news.fetch_all(
-                request.app.state.http,
-                settings.feeds,
-                limit=settings.max_front_page_items,
-                max_per_source=settings.max_items_per_source,
-            )
+            items = await news.fetch_all(request.app.state.http, settings.feeds)
             if items:  # don't cache a total outage
-                cache.set("front_page", items)
+                cache.set("all_news", items)
         return items
+
+    def find_source(slug: str | None) -> Feed | None:
+        """The feed for a ?source= value. None means all sources; unknown values raise 404."""
+        if not slug:
+            return None
+        for feed in settings.feeds:
+            if feed.slug == slug.lower():
+                return feed
+        raise HTTPException(status_code=404, detail=f"Unknown news source '{slug[:30]}'")
+
+    async def front_page_news(request: Request, feed: Feed | None = None) -> list[news.NewsItem]:
+        items = await all_news(request)
+        if feed is None:
+            return news.merge_news(
+                [items], limit=settings.max_front_page_items, max_per_source=settings.max_items_per_source
+            )
+        return [i for i in items if i.source == feed.source][: settings.max_items_single_source]
+
+    def source_nav(items: list[news.NewsItem]) -> list[dict]:
+        counts: dict[str, int] = {}
+        for i in items:
+            counts[i.source] = counts.get(i.source, 0) + 1
+        return [
+            {
+                "slug": f.slug,
+                "name": f.source,
+                "label": f.label,
+                "count": min(counts.get(f.source, 0), settings.max_items_single_source),
+            }
+            for f in settings.feeds
+        ]
 
     async def cached_quote(request: Request, symbol: str) -> stocks.Quote:
         """Quote for an already-normalized symbol, cached. Raises QuoteNotFound / QuoteUnavailable."""
@@ -88,9 +115,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # ---------- HTML pages ----------
 
     @app.get("/", response_class=HTMLResponse)
-    async def index(request: Request):
-        items = await front_page_news(request)
-        return templates.TemplateResponse(request, "index.html", {"items": items})
+    async def index(request: Request, source: str | None = None):
+        try:
+            feed = find_source(source)
+        except HTTPException as exc:
+            return templates.TemplateResponse(
+                request, "error.html", {"status": 404, "message": exc.detail}, status_code=404
+            )
+        items = await front_page_news(request, feed)
+        everything = await all_news(request)
+        return templates.TemplateResponse(
+            request,
+            "index.html",
+            {
+                "items": items,
+                "sources": source_nav(everything),
+                "total_count": min(len(everything), settings.max_front_page_items),
+                "active_source": feed,
+            },
+        )
 
     @app.get("/search")
     async def search(symbol: str = Query(..., min_length=1)):
@@ -118,9 +161,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # ---------- JSON API ----------
 
     @app.get("/api/news")
-    async def api_news(request: Request):
-        items = await front_page_news(request)
-        return {"count": len(items), "items": [i.to_dict() for i in items]}
+    async def api_news(request: Request, source: str | None = None):
+        feed = find_source(source)
+        items = await front_page_news(request, feed)
+        return {"count": len(items), "source": feed.source if feed else None, "items": [i.to_dict() for i in items]}
+
+    @app.get("/api/sources")
+    async def api_sources(request: Request):
+        return {"sources": source_nav(await all_news(request))}
 
     @app.get("/api/quotes")
     async def api_quotes(request: Request, symbols: str | None = None):
