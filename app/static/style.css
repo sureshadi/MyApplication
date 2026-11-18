@@ -147,7 +147,9 @@ main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 8px; }
 /* ---------- Layout with source sidebar ---------- */
 .layout { display: grid; grid-template-columns: 248px minmax(0, 1fr); gap: 28px; align-items: start; }
 .sidebar {
-  position: sticky; top: 140px;
+  /* Pinned exactly where it starts (just below the sticky header), so it never shifts while headlines scroll. */
+  position: sticky; top: calc(var(--header-h, 170px) + 24px);
+  max-height: calc(100vh - var(--header-h, 170px) - 40px); overflow-y: auto; scrollbar-width: thin;
   background: var(--surface); border: 1px solid var(--border); border-radius: 18px;
   padding: 18px 12px 14px; box-shadow: var(--shadow);
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
