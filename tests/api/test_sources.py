@@ -86,3 +86,13 @@ class TestSidebar:
         html = client.get("/").text
         assert '<span class="source-count">4</span>' in html
         assert html.count('<span class="source-count">2</span>') == 2
+
+
+class TestSidebarPinningAssets:
+    def test_css_pins_sidebar_below_measured_header(self, client):
+        css = client.get("/static/style.css").text
+        assert "position: sticky; top: calc(var(--header-h, 170px) + 24px);" in css
+
+    def test_script_measures_header_height(self, client):
+        js = client.get("/static/app.js").text
+        assert 'setProperty("--header-h"' in js and "ResizeObserver" in js

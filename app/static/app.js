@@ -149,3 +149,17 @@
   relTimes();
   setInterval(function () { fetchQuotes(watchlist); relTimes(); }, REFRESH_MS);
 })();
+
+// Keep --header-h equal to the sticky header's real height, so the source sidebar
+// sticks at exactly its starting position and doesn't move while the page scrolls.
+(function () {
+  "use strict";
+  var header = document.querySelector(".site-header");
+  if (!header) return;
+  function update() {
+    document.documentElement.style.setProperty("--header-h", header.offsetHeight + "px");
+  }
+  update();
+  if ("ResizeObserver" in window) new ResizeObserver(update).observe(header);
+  else window.addEventListener("resize", update);
+})();
