@@ -2,7 +2,7 @@
 
 A small web app that:
 
-- shows the latest financial news from major outlets (CNBC, MarketWatch, Wall Street Journal, Yahoo Finance, New York Times, Financial Times) on the front page, merged, de-duplicated and sorted newest first
+- shows the latest financial news from major outlets (Wall Street Journal, New York Times, CNBC, Financial Times) on the front page, merged, de-duplicated and sorted newest first
 - given a ticker symbol (for example `AAPL`), shows the current quote, the change on the day, a one-month price chart and related headlines
 
 Built with FastAPI, Jinja templates, httpx and feedparser.

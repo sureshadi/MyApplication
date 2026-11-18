@@ -12,14 +12,11 @@ class Feed:
     url: str
 
 
-# Public RSS feeds from major financial news outlets.
+# Public RSS feeds from major financial news outlets shown on the front page.
+# Yahoo Finance and MarketWatch are left out for now.
 DEFAULT_FEEDS: tuple[Feed, ...] = (
     Feed("CNBC", "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664"),
-    Feed("MarketWatch", "https://feeds.content.dowjones.io/public/rss/mw_topstories"),
     Feed("Wall Street Journal", "https://feeds.content.dowjones.io/public/rss/RSSMarketsMain"),
-    # Yahoo's general news index (finance.yahoo.com/news/rssindex) now returns 404, so use its
-    # headline feed for the major US indexes (S&P 500, Dow, Nasdaq) instead.
-    Feed("Yahoo Finance", "https://feeds.finance.yahoo.com/rss/2.0/headline?s=%5EGSPC,%5EDJI,%5EIXIC&region=US&lang=en-US"),
     Feed("New York Times", "https://rss.nytimes.com/services/xml/rss/nyt/Business.xml"),
     Feed("Financial Times", "https://www.ft.com/markets?format=rss"),
 )
