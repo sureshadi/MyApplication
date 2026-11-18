@@ -130,7 +130,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             {
                 "items": items,
                 "sources": source_nav(everything),
-                "total_count": min(len(everything), settings.max_front_page_items),
+                "total_count": len(items) if feed is None else len(await front_page_news(request, None)),
                 "active_source": feed,
             },
         )

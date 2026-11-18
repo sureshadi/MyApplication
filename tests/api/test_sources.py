@@ -73,6 +73,15 @@ class TestSidebar:
         r = client.get("/", params={"source": "nope"})
         assert r.status_code == 404 and "Unknown news source" in r.text
 
+    def test_all_sources_count_matches_headlines_shown(self, mock_http):
+        # With a cap of 1 per source, "All sources" shows 2 headlines (1 CNBC + 1 MarketWatch), not 4.
+        with TestClient(create_app(make_settings(max_items_per_source=1))) as c:
+            html = c.get("/").text
+            assert html.count('data-testid="news-item"') == 2
+            assert 'data-slug="all"' in html and '<span class="source-count">2</span>' in html.split('data-slug="all"')[1].split("</a>")[0]
+            html_cnbc = c.get("/", params={"source": "cnbc"}).text
+            assert '<span class="source-count">2</span>' in html_cnbc.split('data-slug="all"')[1].split("</a>")[0]
+
     def test_counts_shown_in_sidebar(self, client):
         html = client.get("/").text
         assert '<span class="source-count">4</span>' in html
