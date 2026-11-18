@@ -22,6 +22,11 @@ class TestNewsApi:
         client.get("/api/news")
         assert mock_http.get(CNBC_URL).call_count == 1
 
+    def test_per_source_cap_applies_to_front_page(self, mock_http):
+        with TestClient(create_app(make_settings(max_items_per_source=1))) as c:
+            items = c.get("/api/news").json()["items"]
+        assert [i["source"] for i in items] == ["MarketWatch", "CNBC"]
+
     def test_all_feeds_down_returns_empty_list(self, mock_http):
         mock_http.get(CNBC_URL).respond(500)
         mock_http.get("https://feeds.test/marketwatch.xml").respond(500)

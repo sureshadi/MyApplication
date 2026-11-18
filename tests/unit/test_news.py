@@ -79,6 +79,16 @@ class TestMergeNews:
         merged = merge_news([[item(str(n), f"https://{n}", n) for n in range(10)]], limit=3)
         assert [i.title for i in merged] == ["9", "8", "7"]
 
+    def test_max_per_source_keeps_newest_from_each_source(self):
+        busy = [item(f"busy {n}", f"https://busy/{n}", n, source="Busy") for n in range(10, 20)]
+        quiet = [item(f"quiet {n}", f"https://quiet/{n}", n, source="Quiet") for n in range(0, 3)]
+        merged = merge_news([busy, quiet], max_per_source=2)
+        assert [i.title for i in merged] == ["busy 19", "busy 18", "quiet 2", "quiet 1"]
+
+    def test_max_per_source_none_keeps_everything(self):
+        busy = [item(f"busy {n}", f"https://busy/{n}", n, source="Busy") for n in range(5)]
+        assert len(merge_news([busy])) == 5
+
 
 class TestFetch:
     async def test_fetch_feed_returns_empty_on_server_error(self, mock_http):

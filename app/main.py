@@ -37,7 +37,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         cache: TTLCache = request.app.state.cache
         items = cache.get("front_page")
         if items is None:
-            items = await news.fetch_all(request.app.state.http, settings.feeds, limit=settings.max_front_page_items)
+            items = await news.fetch_all(
+                request.app.state.http,
+                settings.feeds,
+                limit=settings.max_front_page_items,
+                max_per_source=settings.max_items_per_source,
+            )
             if items:  # don't cache a total outage
                 cache.set("front_page", items)
         return items

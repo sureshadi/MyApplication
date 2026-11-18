@@ -17,7 +17,9 @@ DEFAULT_FEEDS: tuple[Feed, ...] = (
     Feed("CNBC", "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664"),
     Feed("MarketWatch", "https://feeds.content.dowjones.io/public/rss/mw_topstories"),
     Feed("Wall Street Journal", "https://feeds.content.dowjones.io/public/rss/RSSMarketsMain"),
-    Feed("Yahoo Finance", "https://finance.yahoo.com/news/rssindex"),
+    # Yahoo's general news index (finance.yahoo.com/news/rssindex) now returns 404, so use its
+    # headline feed for the major US indexes (S&P 500, Dow, Nasdaq) instead.
+    Feed("Yahoo Finance", "https://feeds.finance.yahoo.com/rss/2.0/headline?s=%5EGSPC,%5EDJI,%5EIXIC&region=US&lang=en-US"),
     Feed("New York Times", "https://rss.nytimes.com/services/xml/rss/nyt/Business.xml"),
     Feed("Financial Times", "https://www.ft.com/markets?format=rss"),
 )
@@ -34,6 +36,8 @@ class Settings:
     cache_ttl_seconds: int = field(default_factory=lambda: int(os.getenv("CACHE_TTL_SECONDS", "300")))
     http_timeout_seconds: float = field(default_factory=lambda: float(os.getenv("HTTP_TIMEOUT_SECONDS", "10")))
     max_front_page_items: int = 60
+    # Keeps a balanced mix: no single outlet can fill more than this many front-page slots.
+    max_items_per_source: int = field(default_factory=lambda: int(os.getenv("MAX_ITEMS_PER_SOURCE", "12")))
 
 
 def get_settings() -> Settings:
