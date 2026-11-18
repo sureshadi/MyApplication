@@ -1,0 +1,17 @@
+# Render Blueprint: deploys the app as a free web service with a public URL.
+# One-click deploy: https://render.com/deploy?repo=https://github.com/sureshadi/MyApplication
+services:
+  - type: web
+    name: market-headlines
+    runtime: python
+    plan: free
+    branch: main
+    autoDeploy: true
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: FINNHUB_API_KEY
+        sync: false # optional: set in the Render dashboard for Finnhub quotes
