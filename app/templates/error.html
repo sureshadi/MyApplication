@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}{{ status }} · Market Headlines{% endblock %}
+{% block content %}
+<section class="error" data-testid="error">
+  <h1>{% if status == 404 %}Symbol not found{% elif status == 400 %}Invalid symbol{% else %}Something went wrong{% endif %}</h1>
+  <p>{{ message }}</p>
+  <p><a href="/">Back to the latest news</a></p>
+</section>
+{% endblock %}

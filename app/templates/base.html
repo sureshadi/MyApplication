@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Market Headlines{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="/">Market Headlines</a>
+    <form class="search" action="/search" method="get" role="search">
+      <label for="symbol" class="visually-hidden">Ticker symbol</label>
+      <input id="symbol" name="symbol" type="text" placeholder="Ticker, e.g. AAPL" autocomplete="off" required maxlength="10">
+      <button type="submit">Look up</button>
+    </form>
+  </header>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="site-footer">Headlines link to their original publishers. Quotes may be delayed.</footer>
+</body>
+</html>

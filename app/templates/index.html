@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block content %}
+{% if request.query_params.get('error') == 'invalid' %}
+<p class="alert" data-testid="invalid-symbol">"{{ request.query_params.get('symbol', '') }}" is not a valid ticker symbol.</p>
+{% endif %}
+<h1>Latest financial news</h1>
+{% include "_news_list.html" %}
+{% endblock %}

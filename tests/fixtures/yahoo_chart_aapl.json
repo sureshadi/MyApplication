@@ -1,0 +1,3 @@
+{"chart":{"result":[{"meta":{"currency":"USD","symbol":"AAPL","longName":"Apple Inc.","regularMarketPrice":232.5,"chartPreviousClose":220.0,"regularMarketDayHigh":234.1,"regularMarketDayLow":229.8,"regularMarketTime":1795017600},
+"timestamp":[1794672000,1794758400,1794844800,1794931200,1795017600],
+"indicators":{"quote":[{"close":[225.0,227.5,null,230.0,232.5]}]}}],"error":null}}

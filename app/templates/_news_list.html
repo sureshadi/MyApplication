@@ -1,0 +1,16 @@
+{% if items %}
+<ul class="news-list" data-testid="news-list">
+  {% for item in items %}
+  <li class="news-item" data-testid="news-item">
+    <a href="{{ item.link }}" target="_blank" rel="noopener noreferrer" class="news-title">{{ item.title }}</a>
+    <div class="news-meta">
+      <span class="news-source">{{ item.source }}</span>
+      {% if item.published %}<time datetime="{{ item.published.isoformat() }}">{{ item.published.strftime('%b %d, %Y %H:%M UTC') }}</time>{% endif %}
+    </div>
+    {% if item.summary %}<p class="news-summary">{{ item.summary }}</p>{% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="empty" data-testid="no-news">No headlines are available right now. Please try again in a few minutes.</p>
+{% endif %}
