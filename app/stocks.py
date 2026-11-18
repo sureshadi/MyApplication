@@ -76,6 +76,21 @@ def normalize_symbol(raw: str) -> str:
     return symbol
 
 
+def parse_symbol_list(raw: str, max_count: int = 25) -> list[str]:
+    """Parse 'aapl, msft,AAPL' into ['AAPL', 'MSFT']: normalized, de-duplicated, order kept."""
+    parts = [p for p in (raw or "").split(",") if p.strip()]
+    if not parts:
+        raise InvalidSymbol("No ticker symbols given")
+    symbols: list[str] = []
+    for part in parts:
+        symbol = normalize_symbol(part)
+        if symbol not in symbols:
+            symbols.append(symbol)
+    if len(symbols) > max_count:
+        raise InvalidSymbol(f"At most {max_count} symbols can be requested at once")
+    return symbols
+
+
 def _ts(value) -> datetime | None:
     return datetime.fromtimestamp(value, tz=timezone.utc) if value else None
 

@@ -25,6 +25,14 @@ DEFAULT_FEEDS: tuple[Feed, ...] = (
 TICKER_NEWS_URL = "https://feeds.finance.yahoo.com/rss/2.0/headline?s={symbol}&region=US&lang=en-US"
 
 
+DEFAULT_WATCHLIST = "AAPL,META,NVDA,AMAT,AVGO,LLY,GOOGL,MSFT"
+
+
+def _watchlist_from_env() -> tuple[str, ...]:
+    raw = os.getenv("WATCHLIST", DEFAULT_WATCHLIST)
+    return tuple(s.strip().upper() for s in raw.split(",") if s.strip())
+
+
 @dataclass(frozen=True)
 class Settings:
     feeds: tuple[Feed, ...] = DEFAULT_FEEDS
@@ -33,6 +41,9 @@ class Settings:
     cache_ttl_seconds: int = field(default_factory=lambda: int(os.getenv("CACHE_TTL_SECONDS", "300")))
     http_timeout_seconds: float = field(default_factory=lambda: float(os.getenv("HTTP_TIMEOUT_SECONDS", "10")))
     max_front_page_items: int = 60
+    # Tickers shown in the top bar by default. Visitors can add or remove their own.
+    watchlist: tuple[str, ...] = field(default_factory=_watchlist_from_env)
+    max_quote_symbols: int = 25
     # Keeps a balanced mix: no single outlet can fill more than this many front-page slots.
     max_items_per_source: int = field(default_factory=lambda: int(os.getenv("MAX_ITEMS_PER_SOURCE", "12")))
 

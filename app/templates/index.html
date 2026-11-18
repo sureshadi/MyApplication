@@ -3,6 +3,10 @@
 {% if request.query_params.get('error') == 'invalid' %}
 <p class="alert" data-testid="invalid-symbol">"{{ request.query_params.get('symbol', '') }}" is not a valid ticker symbol.</p>
 {% endif %}
-<h1>Latest financial news</h1>
+<div class="page-head">
+  <h1>Latest financial news</h1>
+  <p class="subtitle">Top stories from the Wall Street Journal, New York Times, CNBC and Financial Times, updated every few minutes.</p>
+</div>
+{% set feature_first = True %}
 {% include "_news_list.html" %}
 {% endblock %}
