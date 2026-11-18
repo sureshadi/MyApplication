@@ -4,20 +4,58 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Market Headlines{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
 </head>
 <body>
   <header class="site-header">
-    <a class="brand" href="/">Market Headlines</a>
-    <form class="search" action="/search" method="get" role="search">
-      <label for="symbol" class="visually-hidden">Ticker symbol</label>
-      <input id="symbol" name="symbol" type="text" placeholder="Ticker, e.g. AAPL" autocomplete="off" required maxlength="10">
-      <button type="submit">Look up</button>
-    </form>
+    <div class="header-inner">
+      <a class="brand" href="/" aria-label="Market Headlines home">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="18" height="18"><polyline points="3,17 9,11 13,15 21,7" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+        <span class="brand-name">Market<span>Headlines</span></span>
+      </a>
+      <form class="search" action="/search" method="get" role="search">
+        <label for="symbol" class="visually-hidden">Ticker symbol</label>
+        <svg class="search-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><line x1="16.5" y1="16.5" x2="21" y2="21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <input id="symbol" name="symbol" type="text" placeholder="Search a ticker, e.g. AAPL" autocomplete="off" required maxlength="10">
+        <button type="submit">Look up</button>
+      </form>
+    </div>
+
+    <nav class="ticker-bar" aria-label="Watchlist" data-testid="ticker-bar"
+         data-default="{{ watchlist|join(',') }}" data-active="{{ active_symbol or '' }}">
+      <div class="ticker-bar-inner">
+        <a class="chip chip-markets{% if not active_symbol %} active{% endif %}" href="/" data-testid="markets-chip">
+          <span class="dot" aria-hidden="true"></span>Markets
+        </a>
+        <div class="chips" id="watchlist" data-testid="watchlist">
+          {% for s in watchlist %}
+          <div class="chip ticker-chip{% if s == active_symbol %} active{% endif %}" data-symbol="{{ s }}" data-testid="ticker-chip">
+            <a href="/ticker/{{ s }}" class="chip-link"><span class="sym">{{ s }}</span><span class="px"></span><span class="chg"></span></a>
+          </div>
+          {% endfor %}
+          <button type="button" class="chip add-btn" aria-label="Add ticker" title="Add ticker" data-testid="add-ticker">+</button>
+        </div>
+      </div>
+      <form class="add-form" data-testid="add-form" hidden>
+        <label for="new-ticker" class="visually-hidden">New ticker symbol</label>
+        <input id="new-ticker" type="text" placeholder="Ticker to add, e.g. TSLA" maxlength="10" autocomplete="off">
+        <button type="submit">Add</button>
+        <button type="button" class="add-cancel" aria-label="Cancel">Cancel</button>
+        <span class="add-error" role="alert" data-testid="add-error"></span>
+      </form>
+    </nav>
   </header>
+
   <main>
     {% block content %}{% endblock %}
   </main>
+
   <footer class="site-footer">Headlines link to their original publishers. Quotes may be delayed.</footer>
+  <script src="{{ url_for('static', path='app.js') }}" defer></script>
 </body>
 </html>

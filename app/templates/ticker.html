@@ -1,29 +1,44 @@
 {% extends "base.html" %}
+{% set active_symbol = quote.symbol %}
 {% block title %}{{ quote.symbol }} · Market Headlines{% endblock %}
 {% block content %}
-<section class="quote" data-testid="quote">
-  <h1><span data-testid="quote-symbol">{{ quote.symbol }}</span>{% if quote.name %} <small>{{ quote.name }}</small>{% endif %}</h1>
-  <div class="price-row">
-    <span class="price" data-testid="quote-price">{{ "%.2f"|format(quote.price) }}</span>
-    {% if quote.currency %}<span class="currency">{{ quote.currency }}</span>{% endif %}
-    <span class="change {{ quote.direction }}" data-testid="quote-change">
-      {{ "%+.2f"|format(quote.change) }} ({{ "%+.2f"|format(quote.change_percent) }}%)
-    </span>
+<section class="quote {{ quote.direction }}" data-testid="quote">
+  <div class="quote-head">
+    <div>
+      <h1><span data-testid="quote-symbol">{{ quote.symbol }}</span></h1>
+      {% if quote.name %}<p class="quote-name">{{ quote.name }}</p>{% endif %}
+    </div>
+    <div class="quote-price-block">
+      <span class="price" data-testid="quote-price">{{ "%.2f"|format(quote.price) }}</span>
+      {% if quote.currency %}<span class="currency">{{ quote.currency }}</span>{% endif %}
+      <span class="change {{ quote.direction }}" data-testid="quote-change">{{ "%+.2f"|format(quote.change) }} ({{ "%+.2f"|format(quote.change_percent) }}%)</span>
+    </div>
   </div>
+  {% if quote.history|length > 1 %}
+  {% set closes = quote.history|map(attribute='close')|list %}
+  {% set lo = closes|min %}{% set hi = closes|max %}{% set span = (hi - lo) or 1 %}
+  {% set pts %}{% for c in closes %}{{ (loop.index0 * 600 / (closes|length - 1))|round(1) }},{{ (110 - (c - lo) / span * 100)|round(1) }} {% endfor %}{% endset %}
+  <svg class="sparkline {{ quote.direction }}" data-testid="price-chart" viewBox="0 0 600 120" preserveAspectRatio="none" role="img" aria-label="Closing prices over the last month">
+    <defs>
+      <linearGradient id="spark-fill" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="currentColor" stop-opacity="0.35"/>
+        <stop offset="100%" stop-color="currentColor" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <polygon fill="url(#spark-fill)" stroke="none" points="0,120 {{ pts }}600,120"/>
+    <polyline fill="none" stroke="currentColor" stroke-width="2.5" vector-effect="non-scaling-stroke" points="{{ pts }}"/>
+  </svg>
+  <p class="chart-caption">Last {{ quote.history|length }} trading days</p>
+  {% endif %}
   <dl class="stats">
     <div><dt>Previous close</dt><dd>{{ "%.2f"|format(quote.previous_close) }}</dd></div>
     {% if quote.day_high is not none %}<div><dt>Day high</dt><dd>{{ "%.2f"|format(quote.day_high) }}</dd></div>{% endif %}
     {% if quote.day_low is not none %}<div><dt>Day low</dt><dd>{{ "%.2f"|format(quote.day_low) }}</dd></div>{% endif %}
-    {% if quote.as_of %}<div><dt>As of</dt><dd>{{ quote.as_of.strftime('%b %d, %Y %H:%M UTC') }}</dd></div>{% endif %}
+    {% if quote.as_of %}<div><dt>As of</dt><dd><time datetime="{{ quote.as_of.isoformat() }}">{{ quote.as_of.strftime('%b %d, %H:%M UTC') }}</time></dd></div>{% endif %}
   </dl>
-  {% if quote.history|length > 1 %}
-  {% set closes = quote.history|map(attribute='close')|list %}
-  {% set lo = closes|min %}{% set hi = closes|max %}{% set span = (hi - lo) or 1 %}
-  <svg class="sparkline {{ quote.direction }}" data-testid="price-chart" viewBox="0 0 300 60" preserveAspectRatio="none" role="img" aria-label="Closing prices over the last month">
-    <polyline fill="none" stroke-width="2" points="{% for c in closes %}{{ (loop.index0 * 300 / (closes|length - 1))|round(1) }},{{ (58 - (c - lo) / span * 56)|round(1) }} {% endfor %}"/>
-  </svg>
-  {% endif %}
 </section>
-<h2>Related news</h2>
+<div class="page-head">
+  <h2>{{ quote.symbol }} news</h2>
+</div>
 {% include "_news_list.html" %}
 {% endblock %}

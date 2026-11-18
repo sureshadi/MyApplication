@@ -3,6 +3,7 @@
 A small web app that:
 
 - shows the latest financial news from major outlets (Wall Street Journal, New York Times, CNBC, Financial Times) on the front page, merged, de-duplicated and sorted newest first
+- has a top ticker bar with live prices for AAPL, META, NVDA, AMAT, AVGO, LLY, GOOGL and MSFT. Visitors can add tickers with **+** and remove them with **×**; their list is saved in their browser
 - given a ticker symbol (for example `AAPL`), shows the current quote, the change on the day, a one-month price chart and related headlines
 
 Built with FastAPI, Jinja templates, httpx and feedparser.
@@ -33,6 +34,7 @@ Open http://127.0.0.1:8000.
 | --- | --- | --- |
 | `FINNHUB_API_KEY` | unset | If set, quotes come from [Finnhub](https://finnhub.io) (free key). Otherwise Yahoo Finance's public chart endpoint is used. |
 | `CACHE_TTL_SECONDS` | `300` | How long news and quotes are cached in memory. |
+| `WATCHLIST` | `AAPL,META,NVDA,AMAT,AVGO,LLY,GOOGL,MSFT` | Default tickers in the top bar. |
 | `MAX_ITEMS_PER_SOURCE` | `12` | Most headlines any one outlet can take on the front page, so busy feeds don't crowd out the rest. |
 | `HTTP_TIMEOUT_SECONDS` | `10` | Timeout for each outside request. |
 
@@ -46,6 +48,7 @@ News feeds are listed in `app/config.py`.
 | `/ticker/{symbol}` | Quote and related news for a ticker |
 | `/search?symbol=aapl` | Redirects to the ticker page |
 | `/api/news` | Headlines as JSON |
+| `/api/quotes?symbols=AAPL,MSFT` | Quotes for the ticker bar (defaults to `WATCHLIST`). Unknown symbols come back with `"error": "not_found"` |
 | `/api/ticker/{symbol}` | Quote and news as JSON (400 invalid, 404 unknown, 503 provider down) |
 | `/healthz` | Health check |
 
@@ -64,7 +67,7 @@ pytest -m e2e          # browser tests against a live local server
 | --- | --- |
 | `tests/unit` | Feed parsing, HTML cleaning, merging and de-duplication, quote parsing, symbol validation, cache |
 | `tests/api` | Every route: JSON shape, caching, error codes, empty states, HTML escaping |
-| `tests/e2e` | Playwright: front page, ticker search, not-found and invalid input, mobile layout |
+| `tests/e2e` | Playwright: front page, ticker search, ticker bar (prices, add, remove, saved after reload, errors), not-found and invalid input, mobile layout |
 
 ## CI
 

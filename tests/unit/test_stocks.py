@@ -78,3 +78,23 @@ class TestGetQuote:
         async with httpx.AsyncClient() as client:
             with pytest.raises(QuoteUnavailable):
                 await get_quote(client, "DOWN")
+
+
+class TestParseSymbolList:
+    def test_normalizes_dedupes_and_keeps_order(self):
+        from app.stocks import parse_symbol_list
+
+        assert parse_symbol_list(" msft,aapl , MSFT,,googl") == ["MSFT", "AAPL", "GOOGL"]
+
+    @pytest.mark.parametrize("raw", ["", " , ", "AAPL,1BAD", "AAPL,<x>"])
+    def test_invalid(self, raw):
+        from app.stocks import parse_symbol_list
+
+        with pytest.raises(InvalidSymbol):
+            parse_symbol_list(raw)
+
+    def test_too_many(self):
+        from app.stocks import parse_symbol_list
+
+        with pytest.raises(InvalidSymbol, match="At most 2"):
+            parse_symbol_list("A,B,C", max_count=2)

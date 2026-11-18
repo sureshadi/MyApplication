@@ -5,6 +5,8 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import asyncio
+
 import httpx
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -32,6 +34,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.cache = TTLCache(settings.cache_ttl_seconds)
     app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
     templates = Jinja2Templates(directory=BASE_DIR / "templates")
+    templates.env.globals["watchlist"] = list(settings.watchlist)
 
     async def front_page_news(request: Request) -> list[news.NewsItem]:
         cache: TTLCache = request.app.state.cache
@@ -47,6 +50,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 cache.set("front_page", items)
         return items
 
+    async def cached_quote(request: Request, symbol: str) -> stocks.Quote:
+        """Quote for an already-normalized symbol, cached. Raises QuoteNotFound / QuoteUnavailable."""
+        cache: TTLCache = request.app.state.cache
+        quote = cache.get(f"quote:{symbol}")
+        if quote is None:
+            quote = await stocks.get_quote(request.app.state.http, symbol, settings.finnhub_api_key)
+            cache.set(f"quote:{symbol}", quote)
+        return quote
+
     async def ticker_data(request: Request, raw_symbol: str):
         try:
             symbol = stocks.normalize_symbol(raw_symbol)
@@ -60,7 +72,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         client: httpx.AsyncClient = request.app.state.http
         try:
-            quote = await stocks.get_quote(client, symbol, settings.finnhub_api_key)
+            quote = await cached_quote(request, symbol)
         except stocks.QuoteNotFound:
             raise HTTPException(status_code=404, detail=f"No quote found for {symbol}")
         except stocks.QuoteUnavailable:
@@ -99,7 +111,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 {"status": exc.status_code, "message": exc.detail, "symbol": symbol.upper()},
                 status_code=exc.status_code,
             )
-        return templates.TemplateResponse(request, "ticker.html", {"quote": quote, "items": related})
+        return templates.TemplateResponse(
+            request, "ticker.html", {"quote": quote, "items": related, "active_symbol": quote.symbol}
+        )
 
     # ---------- JSON API ----------
 
@@ -107,6 +121,37 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def api_news(request: Request):
         items = await front_page_news(request)
         return {"count": len(items), "items": [i.to_dict() for i in items]}
+
+    @app.get("/api/quotes")
+    async def api_quotes(request: Request, symbols: str | None = None):
+        """Quotes for the top ticker bar. Unknown or unavailable symbols come back with an error, not a failure."""
+        try:
+            wanted = (
+                stocks.parse_symbol_list(symbols, settings.max_quote_symbols)
+                if symbols is not None
+                else list(settings.watchlist)
+            )
+        except stocks.InvalidSymbol as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+        async def one(symbol: str) -> dict:
+            try:
+                q = await cached_quote(request, symbol)
+            except stocks.QuoteNotFound:
+                return {"symbol": symbol, "error": "not_found"}
+            except stocks.QuoteUnavailable:
+                return {"symbol": symbol, "error": "unavailable"}
+            return {
+                "symbol": symbol,
+                "name": q.name,
+                "price": q.price,
+                "change": q.change,
+                "change_percent": q.change_percent,
+                "currency": q.currency,
+                "error": None,
+            }
+
+        return {"quotes": await asyncio.gather(*(one(s) for s in wanted))}
 
     @app.get("/api/ticker/{symbol}")
     async def api_ticker(request: Request, symbol: str):
