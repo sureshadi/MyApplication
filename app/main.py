@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+import hashlib
 from pathlib import Path
 
 import asyncio
@@ -34,6 +35,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.cache = TTLCache(settings.cache_ttl_seconds)
     app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
     templates = Jinja2Templates(directory=BASE_DIR / "templates")
+    def asset_version(path: str) -> str:
+        """Short content hash of a static file, so each deploy gets new asset URLs and browsers
+        never keep an old stylesheet or script from their cache."""
+        try:
+            return hashlib.sha256((BASE_DIR / "static" / path).read_bytes()).hexdigest()[:10]
+        except OSError:
+            return "0"
+
+    asset_versions = {p: asset_version(p) for p in ("style.css", "app.js")}
+
+    def asset_url(request: Request, path: str) -> str:
+        version = asset_versions.get(path) or asset_version(path)
+        return f"{request.url_for('static', path=path)}?v={version}"
+
+    templates.env.globals["asset_url"] = asset_url
     templates.env.globals["watchlist"] = list(settings.watchlist)
     templates.env.globals["topics"] = [{"slug": t.slug, "title": t.title} for t in settings.topics]
 
@@ -47,8 +63,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 cache.set("all_news", items)
         return items
 
-    async def topic_news(request: Request, topic: Topic) -> list[news.NewsItem]:
-        """Newest headlines for one themed section (cached, mixed across its feeds)."""
+    async def all_topic_news(request: Request, topic: Topic) -> list[news.NewsItem]:
+        """Every headline from one themed tab's feeds, de-duplicated and newest first (cached)."""
         cache: TTLCache = request.app.state.cache
         key = f"topic:{topic.slug}"
         items = cache.get(key)
@@ -56,6 +72,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             items = await news.fetch_all(request.app.state.http, topic.feeds)
             if items:
                 cache.set(key, items)
+        return items
+
+    async def topic_news(request: Request, topic: Topic, feed: Feed | None = None) -> list[news.NewsItem]:
+        """Headlines for a themed tab: a balanced mix of its feeds, or just one feed."""
+        items = await all_topic_news(request, topic)
+        if feed is not None:
+            return [i for i in items if i.source == feed.source][: settings.max_items_single_source]
         per_source = -(-settings.max_items_per_topic // max(len(topic.feeds), 1))  # balanced mix
         return news.merge_news([items], limit=settings.max_items_per_topic, max_per_source=per_source)
 
@@ -65,11 +88,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 return topic
         raise HTTPException(status_code=404, detail=f"Unknown news topic '{slug[:30]}'")
 
-    def find_source(slug: str | None) -> Feed | None:
+    def find_source(slug: str | None, feeds: tuple[Feed, ...] | None = None) -> Feed | None:
         """The feed for a ?source= value. None means all sources; unknown values raise 404."""
         if not slug:
             return None
-        for feed in settings.feeds:
+        for feed in feeds if feeds is not None else settings.feeds:
             if feed.slug == slug.lower():
                 return feed
         raise HTTPException(status_code=404, detail=f"Unknown news source '{slug[:30]}'")
@@ -82,7 +105,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
         return [i for i in items if i.source == feed.source][: settings.max_items_single_source]
 
-    def source_nav(items: list[news.NewsItem]) -> list[dict]:
+    def source_nav(items: list[news.NewsItem], feeds: tuple[Feed, ...] | None = None) -> list[dict]:
         counts: dict[str, int] = {}
         for i in items:
             counts[i.source] = counts.get(i.source, 0) + 1
@@ -93,7 +116,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "label": f.label,
                 "count": min(counts.get(f.source, 0), settings.max_items_single_source),
             }
-            for f in settings.feeds
+            for f in (feeds if feeds is not None else settings.feeds)
         ]
 
     async def cached_quote(request: Request, symbol: str) -> stocks.Quote:
@@ -160,17 +183,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return templates.TemplateResponse(request, "portfolio.html", {"active_tab": "portfolio"})
 
     @app.get("/news/{slug}", response_class=HTMLResponse)
-    async def topic_page(request: Request, slug: str):
+    async def topic_page(request: Request, slug: str, source: str | None = None):
         try:
             topic = find_topic(slug)
+            feed = find_source(source, topic.feeds)
         except HTTPException as exc:
             return templates.TemplateResponse(
                 request, "error.html", {"status": 404, "message": exc.detail}, status_code=404
             )
+        items = await topic_news(request, topic, feed)
         return templates.TemplateResponse(
             request,
             "topic.html",
-            {"topic": topic, "items": await topic_news(request, topic), "active_tab": topic.slug},
+            {
+                "topic": topic,
+                "items": items,
+                "sources": source_nav(await all_topic_news(request, topic), topic.feeds),
+                "total_count": len(items) if feed is None else len(await topic_news(request, topic)),
+                "active_source": feed,
+                "active_tab": topic.slug,
+            },
         )
 
     @app.get("/search")

@@ -101,3 +101,26 @@ class TestHtmlPages:
             text = c.get("/").text
         assert "<b>bold" not in text
         assert "AT&amp;T &lt;b&gt;bold" in text
+
+
+class TestAssetCacheBusting:
+    """Each deploy must give the stylesheet and script new URLs, so browsers like Chrome
+    can't keep showing a new page with an old cached stylesheet."""
+
+    def test_assets_have_content_hash_version(self, client):
+        import hashlib
+        import re
+        from pathlib import Path
+
+        html = client.get("/").text
+        static = Path(__file__).resolve().parents[2] / "app" / "static"
+        for name in ("style.css", "app.js"):
+            expected = hashlib.sha256((static / name).read_bytes()).hexdigest()[:10]
+            assert re.search(rf"/static/{re.escape(name)}\?v={expected}\"", html), name
+
+    def test_versioned_asset_is_served(self, client):
+        import re
+
+        href = re.search(r'href="([^"]*style\.css\?v=[0-9a-f]+)"', client.get("/").text).group(1)
+        r = client.get(href)
+        assert r.status_code == 200 and ".tabs-inner" in r.text

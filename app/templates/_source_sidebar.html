@@ -1,0 +1,24 @@
+{# Left "Sources" pane. Needs: base_url, sources, total_count, active_source. #}
+  <aside class="sidebar" aria-label="News sources" data-testid="source-sidebar">
+    <p class="sidebar-title">Sources</p>
+    <nav class="source-list">
+      <a href="{{ base_url }}" class="source-link{% if not active_source %} active{% endif %}" data-testid="source-link" data-slug="all"
+         {% if not active_source %}aria-current="page"{% endif %}>
+        <span class="source-icon all" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="16" height="16"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>
+        </span>
+        <span class="source-name">All sources</span>
+        <span class="source-count">{{ total_count }}</span>
+      </a>
+      {% for s in sources %}
+      {% set is_active = active_source and active_source.slug == s.slug %}
+      <a href="{{ base_url }}?source={{ s.slug }}" class="source-link{% if is_active %} active{% endif %}" data-testid="source-link" data-slug="{{ s.slug }}"
+         data-source="{{ s.name }}"{% if is_active %} aria-current="page"{% endif %}>
+        <span class="source-icon" data-source="{{ s.name }}" aria-hidden="true">{{ s.label[:4] }}</span>
+        <span class="source-name">{{ s.name }}</span>
+        <span class="source-count">{{ s.count }}</span>
+      </a>
+      {% endfor %}
+    </nav>
+    <p class="sidebar-note">Headlines refresh every few minutes.</p>
+  </aside>

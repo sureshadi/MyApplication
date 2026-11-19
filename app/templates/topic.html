@@ -1,12 +1,22 @@
 {% extends "base.html" %}
-{% block title %}{{ topic.title }} news · Market Headlines{% endblock %}
+{% block title %}{% if active_source %}{{ active_source.source }} · {% endif %}{{ topic.title }} news · Market Headlines{% endblock %}
 {% block content %}
-<section class="feed topic-page topic-{{ topic.slug }}" data-testid="topic-page" data-topic="{{ topic.slug }}">
-  <div class="page-head">
-    <h1 data-testid="feed-heading">Latest {{ topic.title|lower }} news</h1>
-    <p class="subtitle">Top {{ topic.title|lower }} stories from {% for f in topic.feeds %}{% if not loop.first %}{% if loop.last %} and {% else %}, {% endif %}{% endif %}{{ f.source }}{% endfor %}, updated every few minutes.</p>
-  </div>
-  {% set feature_first = True %}
-  {% include "_news_list.html" %}
-</section>
+<div class="layout">
+  {% set base_url = "/news/" ~ topic.slug %}
+  {% include "_source_sidebar.html" %}
+
+  <section class="feed topic-page topic-{{ topic.slug }}" data-testid="topic-page" data-topic="{{ topic.slug }}">
+    <div class="page-head">
+      {% if active_source %}
+      <h1 data-testid="feed-heading">{{ topic.title }} news from {{ active_source.source }}</h1>
+      <p class="subtitle">The newest {{ topic.title|lower }} headlines from {{ active_source.source }}.</p>
+      {% else %}
+      <h1 data-testid="feed-heading">Latest {{ topic.title|lower }} news</h1>
+      <p class="subtitle">Top {{ topic.title|lower }} stories from {% for s in sources %}{% if not loop.first %}{% if loop.last %} and {% else %}, {% endif %}{% endif %}{{ s.name }}{% endfor %}, updated every few minutes.</p>
+      {% endif %}
+    </div>
+    {% set feature_first = True %}
+    {% include "_news_list.html" %}
+  </section>
+</div>
 {% endblock %}
