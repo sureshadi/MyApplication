@@ -15,7 +15,7 @@ from fastapi.templating import Jinja2Templates
 
 from . import news, stocks
 from .cache import TTLCache
-from .config import Feed, Settings, get_settings
+from .config import Feed, Settings, Topic, get_settings
 
 BASE_DIR = Path(__file__).parent
 
@@ -45,6 +45,28 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if items:  # don't cache a total outage
                 cache.set("all_news", items)
         return items
+
+    async def topic_news(request: Request, topic: Topic) -> list[news.NewsItem]:
+        """Newest headlines for one themed section (cached, mixed across its feeds)."""
+        cache: TTLCache = request.app.state.cache
+        key = f"topic:{topic.slug}"
+        items = cache.get(key)
+        if items is None:
+            items = await news.fetch_all(request.app.state.http, topic.feeds)
+            if items:
+                cache.set(key, items)
+        per_source = -(-settings.max_items_per_topic // max(len(topic.feeds), 1))  # balanced mix
+        return news.merge_news([items], limit=settings.max_items_per_topic, max_per_source=per_source)
+
+    async def all_topics(request: Request) -> list[dict]:
+        results = await asyncio.gather(*(topic_news(request, t) for t in settings.topics))
+        return [{"slug": t.slug, "title": t.title, "items": items} for t, items in zip(settings.topics, results)]
+
+    def find_topic(slug: str) -> Topic:
+        for topic in settings.topics:
+            if topic.slug == slug.lower():
+                return topic
+        raise HTTPException(status_code=404, detail=f"Unknown news topic '{slug[:30]}'")
 
     def find_source(slug: str | None) -> Feed | None:
         """The feed for a ?source= value. None means all sources; unknown values raise 404."""
@@ -132,6 +154,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "sources": source_nav(everything),
                 "total_count": len(items) if feed is None else len(await front_page_news(request, None)),
                 "active_source": feed,
+                # Technology and Health sit at the top of the main front page.
+                "topics": await all_topics(request) if feed is None else [],
             },
         )
 
@@ -165,6 +189,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         feed = find_source(source)
         items = await front_page_news(request, feed)
         return {"count": len(items), "source": feed.source if feed else None, "items": [i.to_dict() for i in items]}
+
+    @app.get("/api/topics/{slug}")
+    async def api_topic(request: Request, slug: str):
+        topic = find_topic(slug)
+        items = await topic_news(request, topic)
+        return {"topic": topic.slug, "title": topic.title, "count": len(items), "items": [i.to_dict() for i in items]}
 
     @app.get("/api/sources")
     async def api_sources(request: Request):

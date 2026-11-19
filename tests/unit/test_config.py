@@ -27,3 +27,10 @@ def test_feed_label_and_slug():
 
 def test_default_feed_slugs_for_sidebar():
     assert [f.slug for f in Settings().feeds] == ["wsj", "nyt", "cnbc", "ft"]
+
+
+def test_front_page_topics_are_technology_then_health():
+    topics = Settings().topics
+    assert [t.slug for t in topics] == ["technology", "health"]
+    assert [t.title for t in topics] == ["Technology", "Health"]
+    assert all(t.feeds for t in topics)

@@ -11,7 +11,7 @@ import pytest
 import respx
 from fastapi.testclient import TestClient
 
-from app.config import Feed, Settings
+from app.config import Feed, Settings, Topic
 from app.main import create_app
 from app.stocks import FINNHUB_BASE, YAHOO_CHART_URL
 
@@ -20,6 +20,8 @@ FIXTURES = Path(__file__).parent / "fixtures"
 CNBC_URL = "https://feeds.test/cnbc.xml"
 MW_URL = "https://feeds.test/marketwatch.xml"
 BROKEN_URL = "https://feeds.test/broken.xml"
+TECH_URL = "https://feeds.test/tech.xml"
+HEALTH_URL = "https://feeds.test/health.xml"
 TICKER_NEWS_URL = "https://feeds.test/ticker/{symbol}.xml"
 
 
@@ -34,6 +36,10 @@ def fixture_json(name: str) -> dict:
 def make_settings(**overrides) -> Settings:
     values = dict(
         feeds=(Feed("CNBC", CNBC_URL), Feed("MarketWatch", MW_URL), Feed("Broken", BROKEN_URL)),
+        topics=(
+            Topic("technology", "Technology", (Feed("TechWire", TECH_URL),)),
+            Topic("health", "Health", (Feed("HealthDaily", HEALTH_URL), Feed("Broken", BROKEN_URL))),
+        ),
         ticker_news_url=TICKER_NEWS_URL,
         finnhub_api_key=None,
         cache_ttl_seconds=60,
@@ -47,6 +53,8 @@ def install_default_routes(router: respx.MockRouter) -> None:
     router.get(CNBC_URL).mock(return_value=httpx.Response(200, content=fixture_bytes("feed_cnbc.xml")))
     router.get(MW_URL).mock(return_value=httpx.Response(200, content=fixture_bytes("feed_marketwatch.xml")))
     router.get(BROKEN_URL).mock(return_value=httpx.Response(500))
+    router.get(TECH_URL).mock(return_value=httpx.Response(200, content=fixture_bytes("feed_tech.xml")))
+    router.get(HEALTH_URL).mock(return_value=httpx.Response(200, content=fixture_bytes("feed_health.xml")))
     router.get(TICKER_NEWS_URL.format(symbol="AAPL")).mock(
         return_value=httpx.Response(200, content=fixture_bytes("ticker_news_aapl.xml"))
     )
