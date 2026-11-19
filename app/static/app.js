@@ -1,4 +1,5 @@
-// Top ticker bar: live prices, add (+) and remove tickers, saved in this browser.
+// Top bar: a "My Portfolio" tab that reveals your tickers with live prices; add (+) and remove
+// tickers, saved in this browser.
 (function () {
   "use strict";
 
@@ -17,6 +18,17 @@
   var cancelBtn = form.querySelector(".add-cancel");
   var defaults = (bar.dataset.default || "").split(",").filter(Boolean);
   var active = bar.dataset.active || "";
+  var tab = bar.querySelector("[data-testid=portfolio-tab]");
+  var panel = bar.querySelector("[data-testid=portfolio]");
+  var countEl = bar.querySelector("[data-testid=portfolio-count]");
+
+  function setOpen(open) {
+    panel.hidden = !open;
+    tab.setAttribute("aria-expanded", open ? "true" : "false");
+    tab.classList.toggle("open", open);
+    if (!open) closeForm();
+  }
+  tab.addEventListener("click", function () { setOpen(panel.hidden); });
 
   function load() {
     try {
@@ -57,13 +69,17 @@
       watchlist = watchlist.filter(function (s) { return s !== symbol; });
       save(watchlist);
       el.remove();
+      updateCount();
     });
 
     el.append(link, remove);
     return el;
   }
 
+  function updateCount() { countEl.textContent = String(watchlist.length); }
+
   function render() {
+    updateCount();
     chipsEl.replaceChildren.apply(chipsEl, watchlist.map(chip).concat([addBtn]));
   }
 
@@ -125,6 +141,7 @@
         watchlist.push(symbol);
         save(watchlist);
         chipsEl.insertBefore(chip(symbol), addBtn);
+        updateCount();
         paint(q);
         closeForm();
       })

@@ -53,3 +53,22 @@ def test_mobile_layout_has_no_horizontal_scroll(page: Page, live_server):
     page.set_viewport_size({"width": 375, "height": 800})
     page.goto(f"{live_server}/ticker/AAPL")
     assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+
+
+def test_technology_and_health_sections_sit_above_financial_news(page: Page, live_server):
+    page.goto(live_server)
+    tech = page.get_by_role("region", name="Technology")
+    health = page.get_by_role("region", name="Health")
+    expect(tech.get_by_test_id("topic-item")).to_have_count(3)
+    expect(health.get_by_test_id("topic-item")).to_have_count(2)
+    expect(tech.get_by_test_id("topic-item").first).to_contain_text("Chipmakers race to build faster AI accelerators")
+    finance_y = page.get_by_test_id("feed-heading").bounding_box()["y"]
+    assert tech.bounding_box()["y"] < finance_y
+    assert health.bounding_box()["y"] < finance_y
+
+
+def test_topic_sections_fit_on_mobile(page: Page, live_server):
+    page.set_viewport_size({"width": 375, "height": 800})
+    page.goto(live_server)
+    expect(page.get_by_role("region", name="Technology")).to_be_visible()
+    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
