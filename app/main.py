@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+import hashlib
 from pathlib import Path
 
 import asyncio
@@ -34,6 +35,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.cache = TTLCache(settings.cache_ttl_seconds)
     app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
     templates = Jinja2Templates(directory=BASE_DIR / "templates")
+    def asset_version(path: str) -> str:
+        """Short content hash of a static file, so each deploy gets new asset URLs and browsers
+        never keep an old stylesheet or script from their cache."""
+        try:
+            return hashlib.sha256((BASE_DIR / "static" / path).read_bytes()).hexdigest()[:10]
+        except OSError:
+            return "0"
+
+    asset_versions = {p: asset_version(p) for p in ("style.css", "app.js")}
+
+    def asset_url(request: Request, path: str) -> str:
+        version = asset_versions.get(path) or asset_version(path)
+        return f"{request.url_for('static', path=path)}?v={version}"
+
+    templates.env.globals["asset_url"] = asset_url
     templates.env.globals["watchlist"] = list(settings.watchlist)
     templates.env.globals["topics"] = [{"slug": t.slug, "title": t.title} for t in settings.topics]
 
