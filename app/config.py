@@ -34,14 +34,14 @@ DEFAULT_FEEDS: tuple[Feed, ...] = (
 
 @dataclass(frozen=True)
 class Topic:
-    """A themed news section shown at the top of the front page, e.g. Technology."""
+    """A themed news tab with its own page, e.g. Technology at /technology."""
 
     slug: str
     title: str
     feeds: tuple[Feed, ...]
 
 
-# Themed sections shown above the financial headlines, in this order.
+# Themed news tabs shown after "Financial news" in the top tab bar, in this order.
 DEFAULT_TOPICS: tuple[Topic, ...] = (
     Topic(
         "technology",
@@ -77,8 +77,8 @@ def _watchlist_from_env() -> tuple[str, ...]:
 class Settings:
     feeds: tuple[Feed, ...] = DEFAULT_FEEDS
     topics: tuple[Topic, ...] = DEFAULT_TOPICS
-    # Headlines per themed section (Technology, Health) on the front page.
-    max_items_per_topic: int = 6
+    # Headlines on a themed tab (Technology, Health), mixed evenly across its feeds.
+    max_items_per_topic: int = 30
     ticker_news_url: str = TICKER_NEWS_URL
     finnhub_api_key: str | None = field(default_factory=lambda: os.getenv("FINNHUB_API_KEY") or None)
     cache_ttl_seconds: int = field(default_factory=lambda: int(os.getenv("CACHE_TTL_SECONDS", "300")))

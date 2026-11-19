@@ -35,6 +35,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
     templates = Jinja2Templates(directory=BASE_DIR / "templates")
     templates.env.globals["watchlist"] = list(settings.watchlist)
+    templates.env.globals["topics"] = [{"slug": t.slug, "title": t.title} for t in settings.topics]
 
     async def all_news(request: Request) -> list[news.NewsItem]:
         """Every headline from every front-page feed, de-duplicated and newest first (cached)."""
@@ -57,10 +58,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 cache.set(key, items)
         per_source = -(-settings.max_items_per_topic // max(len(topic.feeds), 1))  # balanced mix
         return news.merge_news([items], limit=settings.max_items_per_topic, max_per_source=per_source)
-
-    async def all_topics(request: Request) -> list[dict]:
-        results = await asyncio.gather(*(topic_news(request, t) for t in settings.topics))
-        return [{"slug": t.slug, "title": t.title, "items": items} for t, items in zip(settings.topics, results)]
 
     def find_topic(slug: str) -> Topic:
         for topic in settings.topics:
@@ -154,9 +151,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "sources": source_nav(everything),
                 "total_count": len(items) if feed is None else len(await front_page_news(request, None)),
                 "active_source": feed,
-                # Technology and Health sit at the top of the main front page.
-                "topics": await all_topics(request) if feed is None else [],
+                "active_tab": "financial",
             },
+        )
+
+    @app.get("/portfolio", response_class=HTMLResponse)
+    async def portfolio_page(request: Request):
+        return templates.TemplateResponse(request, "portfolio.html", {"active_tab": "portfolio"})
+
+    @app.get("/news/{slug}", response_class=HTMLResponse)
+    async def topic_page(request: Request, slug: str):
+        try:
+            topic = find_topic(slug)
+        except HTTPException as exc:
+            return templates.TemplateResponse(
+                request, "error.html", {"status": 404, "message": exc.detail}, status_code=404
+            )
+        return templates.TemplateResponse(
+            request,
+            "topic.html",
+            {"topic": topic, "items": await topic_news(request, topic), "active_tab": topic.slug},
         )
 
     @app.get("/search")
@@ -179,7 +193,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 status_code=exc.status_code,
             )
         return templates.TemplateResponse(
-            request, "ticker.html", {"quote": quote, "items": related, "active_symbol": quote.symbol}
+            request,
+            "ticker.html",
+            {"quote": quote, "items": related, "active_symbol": quote.symbol, "active_tab": "portfolio"},
         )
 
     # ---------- JSON API ----------

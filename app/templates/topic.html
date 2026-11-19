@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}{{ topic.title }} news · Market Headlines{% endblock %}
+{% block content %}
+<section class="feed topic-page topic-{{ topic.slug }}" data-testid="topic-page" data-topic="{{ topic.slug }}">
+  <div class="page-head">
+    <h1 data-testid="feed-heading">Latest {{ topic.title|lower }} news</h1>
+    <p class="subtitle">Top {{ topic.title|lower }} stories from {% for f in topic.feeds %}{% if not loop.first %}{% if loop.last %} and {% else %}, {% endif %}{% endif %}{{ f.source }}{% endfor %}, updated every few minutes.</p>
+  </div>
+  {% set feature_first = True %}
+  {% include "_news_list.html" %}
+</section>
+{% endblock %}

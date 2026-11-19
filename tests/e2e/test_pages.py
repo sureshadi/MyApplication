@@ -55,20 +55,33 @@ def test_mobile_layout_has_no_horizontal_scroll(page: Page, live_server):
     assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
 
 
-def test_technology_and_health_sections_sit_above_financial_news(page: Page, live_server):
+def tab(page: Page, slug: str):
+    return page.locator(f'[data-testid="tab"][data-tab="{slug}"]')
+
+
+def test_tabs_switch_the_page(page: Page, live_server):
     page.goto(live_server)
-    tech = page.get_by_role("region", name="Technology")
-    health = page.get_by_role("region", name="Health")
-    expect(tech.get_by_test_id("topic-item")).to_have_count(3)
-    expect(health.get_by_test_id("topic-item")).to_have_count(2)
-    expect(tech.get_by_test_id("topic-item").first).to_contain_text("Chipmakers race to build faster AI accelerators")
-    finance_y = page.get_by_test_id("feed-heading").bounding_box()["y"]
-    assert tech.bounding_box()["y"] < finance_y
-    assert health.bounding_box()["y"] < finance_y
+    expect(page.get_by_test_id("tab")).to_have_text(["Financial news", "Technology news", "Health news", "My Portfolio"])
+    expect(tab(page, "financial")).to_have_attribute("aria-current", "page")
+    expect(page.get_by_role("heading", name="Latest financial news")).to_be_visible()
+
+    page.get_by_role("link", name="Health news").click()
+    expect(page).to_have_url(re.compile(r"/news/health$"))
+    expect(page.get_by_role("heading", name="Latest health news")).to_be_visible()
+    expect(tab(page, "health")).to_have_attribute("aria-current", "page")
+    expect(page.get_by_test_id("news-item")).to_have_count(2)
+    expect(page.get_by_text("Stocks rally to record")).to_have_count(0)
+
+    page.get_by_role("link", name="Technology news").click()
+    expect(page.get_by_role("heading", name="Latest technology news")).to_be_visible()
+    expect(page.get_by_test_id("news-item").first).to_contain_text("Chipmakers race to build faster AI accelerators")
+
+    page.get_by_role("link", name="Financial news").click()
+    expect(page.get_by_role("heading", name="Latest financial news")).to_be_visible()
 
 
-def test_topic_sections_fit_on_mobile(page: Page, live_server):
+def test_tabs_fit_on_mobile(page: Page, live_server):
     page.set_viewport_size({"width": 375, "height": 800})
-    page.goto(live_server)
-    expect(page.get_by_role("region", name="Technology")).to_be_visible()
-    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+    for path in ("/", "/news/technology", "/news/health", "/portfolio"):
+        page.goto(live_server + path)
+        assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), path

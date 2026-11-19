@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}My Portfolio · Market Headlines{% endblock %}
+{% block content %}
+<section class="portfolio" data-testid="portfolio" data-default="{{ watchlist|join(',') }}">
+  <div class="page-head portfolio-head">
+    <div>
+      <h1>My Portfolio</h1>
+      <p class="subtitle"><span data-testid="portfolio-count">{{ watchlist|length }}</span> tickers with the latest prices. Click one for its chart and news. Changes are saved in this browser.</p>
+    </div>
+  </div>
+  <div class="ticker-grid" id="watchlist" data-testid="watchlist">
+    {% for s in watchlist %}
+    <div class="ticker-card" data-symbol="{{ s }}" data-testid="ticker-chip">
+      <a href="/ticker/{{ s }}" class="chip-link"><span class="sym">{{ s }}</span><span class="name"></span><span class="px"></span><span class="chg"></span></a>
+    </div>
+    {% endfor %}
+    <button type="button" class="ticker-card add-btn" aria-label="Add ticker" title="Add ticker" data-testid="add-ticker"><span aria-hidden="true">+</span> Add ticker</button>
+  </div>
+  <form class="add-form" data-testid="add-form" hidden>
+    <label for="new-ticker" class="visually-hidden">New ticker symbol</label>
+    <input id="new-ticker" type="text" placeholder="Ticker to add, e.g. TSLA" maxlength="10" autocomplete="off">
+    <button type="submit">Add</button>
+    <button type="button" class="add-cancel" aria-label="Cancel">Cancel</button>
+    <span class="add-error" role="alert" data-testid="add-error"></span>
+  </form>
+</section>
+{% endblock %}
