@@ -21,7 +21,9 @@
       <form class="search" action="/search" method="get" role="search">
         <label for="symbol" class="visually-hidden">Ticker symbol</label>
         <svg class="search-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><line x1="16.5" y1="16.5" x2="21" y2="21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-        <input id="symbol" name="symbol" type="text" placeholder="Search a ticker, e.g. AAPL" autocomplete="off" required maxlength="10">
+        <input id="symbol" name="symbol" type="text" placeholder="Search a ticker or company, e.g. AAPL or Apple" autocomplete="off" required maxlength="40"
+               role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="search-suggestions" data-testid="search-input">
+        <ul class="suggestions" id="search-suggestions" role="listbox" aria-label="Suggestions" data-testid="suggestions" hidden></ul>
         <button type="submit">Look up</button>
       </form>
     </div>

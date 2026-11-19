@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 from app.config import Feed, Settings, Topic
 from app.main import create_app
 from app.stocks import FINNHUB_BASE, YAHOO_CHART_URL
+from app.suggest import YAHOO_SEARCH_URL
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -69,10 +70,30 @@ def install_default_routes(router: respx.MockRouter) -> None:
     # Any other symbol (e.g. the default watchlist) gets a generated quote; "NOPE*" symbols don't exist.
     router.get(url__regex=r"https://query1\.finance\.yahoo\.com/v8/finance/chart/[^/?]+").mock(side_effect=_generated_chart)
     router.get(url__regex=r"https://feeds\.test/ticker/[^/?]+\.xml").mock(return_value=httpx.Response(200, content=b"<rss/>"))
+    router.get(YAHOO_SEARCH_URL).mock(side_effect=_yahoo_search)
     router.get(f"{FINNHUB_BASE}/quote").mock(return_value=httpx.Response(200, json=fixture_json("finnhub_quote_msft.json")))
     router.get(f"{FINNHUB_BASE}/stock/profile2").mock(
         return_value=httpx.Response(200, json=fixture_json("finnhub_profile_msft.json"))
     )
+
+
+YAHOO_SEARCH_RESULTS = {
+    "rivian": [
+        {"symbol": "RIVN", "shortname": "Rivian Automotive, Inc.", "exchDisp": "NASDAQ", "quoteType": "EQUITY"},
+        {"symbol": "RIVN240119C", "shortname": "Rivian option", "exchDisp": "OPR", "quoteType": "OPTION"},
+    ],
+    "apple": [
+        {"symbol": "AAPL", "shortname": "Apple Inc.", "exchDisp": "NASDAQ", "quoteType": "EQUITY"},
+        {"symbol": "APLE", "shortname": "Apple Hospitality REIT, Inc.", "exchDisp": "NYSE", "quoteType": "EQUITY"},
+    ],
+}
+
+
+def _yahoo_search(request: httpx.Request) -> httpx.Response:
+    q = request.url.params.get("q", "").lower()
+    if q == "down":
+        return httpx.Response(503)
+    return httpx.Response(200, json={"quotes": YAHOO_SEARCH_RESULTS.get(q, []), "news": []})
 
 
 def generated_price(symbol: str) -> float:

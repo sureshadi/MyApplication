@@ -14,7 +14,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import news, stocks
+from . import news, stocks, suggest
 from .cache import TTLCache
 from .config import Feed, Settings, Topic, get_settings
 
@@ -210,6 +210,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         try:
             normalized = stocks.normalize_symbol(symbol)
         except stocks.InvalidSymbol:
+            # Not a symbol: maybe a company name, like "apple". Use the best suggestion.
+            words = symbol.split()
+            best = suggest.local_matches(symbol, limit=1) or (suggest.local_matches(words[0], limit=1) if words else [])
+            if best:
+                return RedirectResponse(url=f"/ticker/{best[0].symbol}", status_code=303)
             return RedirectResponse(url=f"/?error=invalid&symbol={symbol[:20]}", status_code=303)
         return RedirectResponse(url=f"/ticker/{normalized}", status_code=303)
 
@@ -243,6 +248,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         topic = find_topic(slug)
         items = await topic_news(request, topic)
         return {"topic": topic.slug, "title": topic.title, "count": len(items), "items": [i.to_dict() for i in items]}
+
+    @app.get("/api/suggest")
+    async def api_suggest(request: Request, q: str = Query("", max_length=40)):
+        """Ticker suggestions for the search box: matching symbols and company names."""
+        query = q.strip()
+        if not query:
+            return {"query": "", "suggestions": []}
+        cache: TTLCache = request.app.state.cache
+        key = f"suggest:{query.lower()}"
+        remote = cache.get(key)
+        if remote is None:
+            remote = await suggest.yahoo_matches(request.app.state.http, query)
+            if remote:
+                cache.set(key, remote)
+        results = suggest.merge(suggest.local_matches(query), remote)
+        return {"query": query, "suggestions": [s.to_dict() for s in results]}
 
     @app.get("/api/sources")
     async def api_sources(request: Request):
