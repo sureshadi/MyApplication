@@ -89,3 +89,30 @@ class TestPortfolioPage:
 
     def test_news_pages_have_no_ticker_list(self, client):
         assert 'data-testid="ticker-chip"' not in client.get("/").text
+
+
+class TestTopicSources:
+    """Technology and Health tabs have the same Sources pane as Financial news."""
+
+    def test_topic_page_lists_its_sources_with_counts(self, client):
+        text = client.get("/news/health").text
+        assert 'data-testid="source-sidebar"' in text
+        assert '<a href="/news/health" class="source-link active" data-testid="source-link" data-slug="all"' in text
+        assert 'href="/news/health?source=healthdaily"' in text
+        assert 'href="/news/health?source=broken"' in text
+        assert 'href="/?source=' not in text  # financial sources stay on the Financial tab
+
+    def test_picking_a_source_filters_the_topic(self, mock_http):
+        from app.config import Feed, Topic
+
+        topics = (Topic("technology", "Technology", (Feed("TechWire", TECH_URL), Feed("HealthDaily", HEALTH_URL))),)
+        with TestClient(create_app(make_settings(topics=topics))) as c:
+            r = c.get("/news/technology", params={"source": "healthdaily"})
+        assert r.status_code == 200
+        assert "Technology news from HealthDaily" in r.text
+        assert r.text.count('data-testid="news-item"') == 2
+        assert "Chipmakers race" not in r.text
+        assert 'data-slug="healthdaily"' in r.text and 'aria-current="page"' in r.text
+
+    def test_unknown_topic_source_404(self, client):
+        assert client.get("/news/technology", params={"source": "wsj"}).status_code == 404

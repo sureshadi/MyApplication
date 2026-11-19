@@ -85,3 +85,15 @@ def test_tabs_fit_on_mobile(page: Page, live_server):
     for path in ("/", "/news/technology", "/news/health", "/portfolio"):
         page.goto(live_server + path)
         assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), path
+
+
+def test_topic_tabs_have_a_sources_pane(page: Page, live_server):
+    page.goto(f"{live_server}/news/health")
+    sidebar = page.get_by_test_id("source-sidebar")
+    expect(sidebar).to_be_visible()
+    expect(sidebar.get_by_test_id("source-link")).to_have_count(3)  # All sources + HealthDaily + Broken
+    sidebar.get_by_role("link", name=re.compile("HealthDaily")).click()
+    expect(page).to_have_url(re.compile(r"/news/health\?source=healthdaily$"))
+    expect(page.get_by_role("heading", name="Health news from HealthDaily")).to_be_visible()
+    expect(page.get_by_test_id("news-item")).to_have_count(2)
+    expect(page.locator('[data-tab="health"]')).to_have_attribute("aria-current", "page")
