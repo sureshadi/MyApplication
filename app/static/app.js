@@ -162,6 +162,142 @@
   setInterval(relTimes, 60000);
 })();
 
+// Search box suggestions: matching tickers and company names appear as you type, like Google.
+(function () {
+  "use strict";
+  var input = document.querySelector("[data-testid=search-input]");
+  var list = document.querySelector("[data-testid=suggestions]");
+  if (!input || !list) return;
+  var form = input.form;
+  var items = [];
+  var activeIndex = -1;
+  var timer = null;
+  var lastQuery = "";
+  var seq = 0;
+
+  function close() {
+    list.hidden = true;
+    list.replaceChildren();
+    items = [];
+    activeIndex = -1;
+    input.setAttribute("aria-expanded", "false");
+    input.removeAttribute("aria-activedescendant");
+  }
+
+  function go(symbol) {
+    window.location.href = "/ticker/" + encodeURIComponent(symbol);
+  }
+
+  function highlight(text, query) {
+    // Bold the part that matches what was typed, safely (no innerHTML).
+    var frag = document.createDocumentFragment();
+    var i = text.toLowerCase().indexOf(query.toLowerCase());
+    if (!query || i < 0) { frag.append(text); return frag; }
+    var b = document.createElement("mark");
+    b.textContent = text.slice(i, i + query.length);
+    frag.append(text.slice(0, i), b, text.slice(i + query.length));
+    return frag;
+  }
+
+  function setActive(i) {
+    var options = list.querySelectorAll("[role=option]");
+    options.forEach(function (el, n) { el.setAttribute("aria-selected", n === i ? "true" : "false"); });
+    activeIndex = i;
+    if (i >= 0 && options[i]) {
+      input.setAttribute("aria-activedescendant", options[i].id);
+      options[i].scrollIntoView({ block: "nearest" });
+    } else {
+      input.removeAttribute("aria-activedescendant");
+    }
+  }
+
+  function render(query, suggestions) {
+    items = suggestions;
+    activeIndex = -1;
+    if (!suggestions.length) {
+      list.replaceChildren();
+      var empty = document.createElement("li");
+      empty.className = "suggestion-empty";
+      empty.textContent = "No matching tickers";
+      list.append(empty);
+    } else {
+      list.replaceChildren.apply(list, suggestions.map(function (s, n) {
+        var li = document.createElement("li");
+        li.id = "suggestion-" + n;
+        li.setAttribute("role", "option");
+        li.setAttribute("aria-selected", "false");
+        li.setAttribute("data-testid", "suggestion");
+        li.dataset.symbol = s.symbol;
+        var sym = document.createElement("span"); sym.className = "sg-sym"; sym.append(highlight(s.symbol, query));
+        var name = document.createElement("span"); name.className = "sg-name"; name.append(highlight(s.name || "", query));
+        var ex = document.createElement("span"); ex.className = "sg-ex"; ex.textContent = s.exchange || "";
+        li.append(sym, name, ex);
+        // mousedown (not click) so it fires before the input loses focus.
+        li.addEventListener("mousedown", function (ev) { ev.preventDefault(); go(s.symbol); });
+        li.addEventListener("mousemove", function () { if (activeIndex !== n) setActive(n); });
+        return li;
+      }));
+    }
+    list.hidden = false;
+    input.setAttribute("aria-expanded", "true");
+  }
+
+  function lookup() {
+    var query = input.value.trim();
+    if (query === lastQuery && !list.hidden) return;
+    lastQuery = query;
+    if (!query) { close(); return; }
+    var mine = ++seq;
+    fetch("/api/suggest?q=" + encodeURIComponent(query))
+      .then(function (r) { return r.ok ? r.json() : { suggestions: [] }; })
+      .then(function (data) {
+        if (mine !== seq || input.value.trim() !== query) return; // a newer keystroke won
+        render(query, data.suggestions || []);
+      })
+      .catch(function () { /* leave the box usable without suggestions */ });
+  }
+
+  input.addEventListener("input", function () {
+    clearTimeout(timer);
+    timer = setTimeout(lookup, 120);
+  });
+  input.addEventListener("focus", function () { if (input.value.trim()) { lastQuery = ""; lookup(); } });
+  input.addEventListener("blur", function () { setTimeout(close, 100); });
+
+  input.addEventListener("keydown", function (ev) {
+    if (list.hidden || !items.length) {
+      if (ev.key === "Escape") close();
+      return;
+    }
+    if (ev.key === "ArrowDown") {
+      ev.preventDefault();
+      setActive((activeIndex + 1) % items.length);
+    } else if (ev.key === "ArrowUp") {
+      ev.preventDefault();
+      setActive(activeIndex <= 0 ? items.length - 1 : activeIndex - 1);
+    } else if (ev.key === "Enter" && activeIndex >= 0) {
+      ev.preventDefault();
+      go(items[activeIndex].symbol);
+    } else if (ev.key === "Escape") {
+      ev.preventDefault();
+      close();
+    }
+  });
+
+  if (form) {
+    form.addEventListener("submit", function (ev) {
+      // Typed a company name (e.g. "apple") and pressed Enter: open the top suggestion (AAPL).
+      // A typed symbol, even one not in the list, is looked up as typed.
+      var typed = input.value.trim().toUpperCase();
+      var exact = items.some(function (s) { return s.symbol === typed; });
+      if (items.length && !exact && items[0].symbol.indexOf(typed) !== 0) {
+        ev.preventDefault();
+        go(items[0].symbol);
+      }
+    });
+  }
+})();
+
 // Keep --header-h equal to the sticky header's real height, so the source sidebar
 // sticks at exactly its starting position and doesn't move while the page scrolls.
 (function () {
