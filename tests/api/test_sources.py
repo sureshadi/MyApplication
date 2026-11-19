@@ -55,7 +55,7 @@ class TestSidebar:
     def test_all_sources_active_by_default(self, client):
         html = client.get("/").text
         assert 'class="source-link active" data-testid="source-link" data-slug="all"' in html
-        assert html.count('aria-current="page"') == 1
+        assert html.count('aria-current="page"') == 2  # "All sources" and the Financial news tab
 
     def test_selected_source_filters_page(self, client):
         r = client.get("/", params={"source": "cnbc"})

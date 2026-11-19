@@ -59,32 +59,22 @@ class TestQuotesApi:
         assert len(aapl_calls) == 1
 
 
-class TestTickerBarMarkup:
-    def test_front_page_has_bar_with_default_tickers_and_add_button(self, client):
-        html = client.get("/").text
-        assert 'data-testid="ticker-bar"' in html
+class TestPortfolioMarkup:
+    def test_portfolio_page_has_default_tickers_and_add_button(self, client):
+        html = client.get("/portfolio").text
+        assert 'data-testid="portfolio"' in html
         assert html.count('data-testid="ticker-chip"') == len(DEFAULT)
         for s in DEFAULT:
             assert f'href="/ticker/{s}"' in html
         assert 'data-testid="add-ticker"' in html and 'aria-label="Add ticker"' in html
         assert 'data-default="' + ",".join(DEFAULT) + '"' in html
 
-    def test_markets_chip_active_on_front_page(self, client):
-        html = client.get("/").text
-        assert 'class="chip chip-markets active"' in html
-
-    def test_ticker_page_marks_its_chip_active(self, client):
-        html = client.get("/ticker/MSFT").text
-        assert 'class="chip ticker-chip active" data-symbol="MSFT"' in html
-        assert 'class="chip chip-markets active"' not in html
-        assert 'data-active="MSFT"' in html
-
-    def test_bar_appears_on_error_pages(self, client):
-        assert 'data-testid="ticker-bar"' in client.get("/ticker/ZZZZ").text
+    def test_tabs_appear_on_error_pages(self, client):
+        assert 'data-testid="tabs"' in client.get("/ticker/ZZZZ").text
 
     def test_watchlist_is_configurable(self, mock_http):
         with TestClient(create_app(make_settings(watchlist=("TSLA", "AMD")))) as c:
-            html = c.get("/").text
+            html = c.get("/portfolio").text
             assert html.count('data-testid="ticker-chip"') == 2
             assert [q["symbol"] for q in c.get("/api/quotes").json()["quotes"]] == ["TSLA", "AMD"]
 

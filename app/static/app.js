@@ -1,5 +1,4 @@
-// Top bar: a "My Portfolio" tab that reveals your tickers with live prices; add (+) and remove
-// tickers, saved in this browser.
+// My Portfolio page: every ticker with live prices; add and remove tickers, saved in this browser.
 (function () {
   "use strict";
 
@@ -8,7 +7,7 @@
   var MAX_TICKERS = 25;
   var REFRESH_MS = 60000;
 
-  var bar = document.querySelector("[data-testid=ticker-bar]");
+  var bar = document.querySelector("[data-testid=portfolio]");
   if (!bar) return;
   var chipsEl = bar.querySelector("#watchlist");
   var addBtn = bar.querySelector("[data-testid=add-ticker]");
@@ -17,18 +16,7 @@
   var errorEl = form.querySelector("[data-testid=add-error]");
   var cancelBtn = form.querySelector(".add-cancel");
   var defaults = (bar.dataset.default || "").split(",").filter(Boolean);
-  var active = bar.dataset.active || "";
-  var tab = bar.querySelector("[data-testid=portfolio-tab]");
-  var panel = bar.querySelector("[data-testid=portfolio]");
   var countEl = bar.querySelector("[data-testid=portfolio-count]");
-
-  function setOpen(open) {
-    panel.hidden = !open;
-    tab.setAttribute("aria-expanded", open ? "true" : "false");
-    tab.classList.toggle("open", open);
-    if (!open) closeForm();
-  }
-  tab.addEventListener("click", function () { setOpen(panel.hidden); });
 
   function load() {
     try {
@@ -46,7 +34,7 @@
 
   function chip(symbol) {
     var el = document.createElement("div");
-    el.className = "chip ticker-chip" + (symbol === active ? " active" : "");
+    el.className = "ticker-card";
     el.dataset.symbol = symbol;
     el.setAttribute("data-testid", "ticker-chip");
 
@@ -54,9 +42,10 @@
     link.className = "chip-link";
     link.href = "/ticker/" + encodeURIComponent(symbol);
     var sym = document.createElement("span"); sym.className = "sym"; sym.textContent = symbol;
+    var name = document.createElement("span"); name.className = "name";
     var px = document.createElement("span"); px.className = "px";
     var chg = document.createElement("span"); chg.className = "chg";
-    link.append(sym, px, chg);
+    link.append(sym, name, px, chg);
 
     var remove = document.createElement("button");
     remove.type = "button";
@@ -91,6 +80,8 @@
     var el = chipsEl.querySelector('[data-symbol="' + q.symbol + '"]');
     if (!el) return;
     var px = el.querySelector(".px"), chg = el.querySelector(".chg");
+    var name = el.querySelector(".name");
+    if (name && q.name) name.textContent = q.name;
     if (q.error) {
       px.textContent = "";
       chg.textContent = "n/a";
@@ -128,7 +119,7 @@
     var symbol = input.value.trim().toUpperCase();
     errorEl.textContent = "";
     if (!SYMBOL_RE.test(symbol)) { errorEl.textContent = "Enter a valid ticker symbol, like TSLA."; return; }
-    if (watchlist.indexOf(symbol) !== -1) { errorEl.textContent = symbol + " is already in your bar."; return; }
+    if (watchlist.indexOf(symbol) !== -1) { errorEl.textContent = symbol + " is already in your portfolio."; return; }
     if (watchlist.length >= MAX_TICKERS) { errorEl.textContent = "You can keep up to " + MAX_TICKERS + " tickers."; return; }
 
     var submit = form.querySelector("button[type=submit]");
@@ -149,7 +140,14 @@
       .then(function () { submit.disabled = false; });
   });
 
-  // Show "5m ago" style times next to headlines.
+  render();
+  fetchQuotes(watchlist);
+  setInterval(function () { fetchQuotes(watchlist); }, REFRESH_MS);
+})();
+
+// Show "5m ago" style times next to headlines.
+(function () {
+  "use strict";
   function relTimes() {
     var now = Date.now();
     document.querySelectorAll(".news-meta time[datetime]").forEach(function (t) {
@@ -160,11 +158,8 @@
       t.textContent = mins < 1 ? "just now" : mins < 60 ? mins + "m ago" : mins < 1440 ? Math.floor(mins / 60) + "h ago" : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
     });
   }
-
-  render();
-  fetchQuotes(watchlist);
   relTimes();
-  setInterval(function () { fetchQuotes(watchlist); relTimes(); }, REFRESH_MS);
+  setInterval(relTimes, 60000);
 })();
 
 // Keep --header-h equal to the sticky header's real height, so the source sidebar

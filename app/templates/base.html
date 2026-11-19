@@ -26,38 +26,26 @@
       </form>
     </div>
 
-    <nav class="ticker-bar" aria-label="Markets and portfolio" data-testid="ticker-bar"
-         data-default="{{ watchlist|join(',') }}" data-active="{{ active_symbol or '' }}">
-      <div class="ticker-bar-inner">
-        <a class="chip chip-markets{% if not active_symbol %} active{% endif %}" href="/" data-testid="markets-chip">
-          <span class="dot" aria-hidden="true"></span>Markets
+    <nav class="tabs" aria-label="Sections" data-testid="tabs">
+      <div class="tabs-inner">
+        <a class="tab{% if active_tab == 'financial' %} active{% endif %}" href="/" data-testid="tab" data-tab="financial"{% if active_tab == 'financial' %} aria-current="page"{% endif %}>
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><polyline points="3,17 9,11 13,15 21,7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Financial<span class="tab-extra"> news</span></span>
         </a>
-        <button type="button" class="chip portfolio-tab{% if active_symbol %} open{% endif %}" data-testid="portfolio-tab"
-                aria-controls="portfolio" aria-expanded="{{ 'true' if active_symbol else 'false' }}">
-          <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 7V5.5A1.5 1.5 0 0 1 9.5 4h5A1.5 1.5 0 0 1 16 5.5V7" fill="none" stroke="currentColor" stroke-width="2"/></svg>
-          My Portfolio
-          <span class="portfolio-count" data-testid="portfolio-count">{{ watchlist|length }}</span>
-          <svg class="caret" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><polyline points="6,9 12,15 18,9" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </button>
-      </div>
-      <div class="portfolio" id="portfolio" data-testid="portfolio"{% if not active_symbol %} hidden{% endif %}>
-        <div class="portfolio-inner">
-          <div class="chips" id="watchlist" data-testid="watchlist">
-            {% for s in watchlist %}
-            <div class="chip ticker-chip{% if s == active_symbol %} active{% endif %}" data-symbol="{{ s }}" data-testid="ticker-chip">
-              <a href="/ticker/{{ s }}" class="chip-link"><span class="sym">{{ s }}</span><span class="px"></span><span class="chg"></span></a>
-            </div>
-            {% endfor %}
-            <button type="button" class="chip add-btn" aria-label="Add ticker" title="Add ticker" data-testid="add-ticker">+</button>
-          </div>
-        </div>
-        <form class="add-form" data-testid="add-form" hidden>
-          <label for="new-ticker" class="visually-hidden">New ticker symbol</label>
-          <input id="new-ticker" type="text" placeholder="Ticker to add, e.g. TSLA" maxlength="10" autocomplete="off">
-          <button type="submit">Add</button>
-          <button type="button" class="add-cancel" aria-label="Cancel">Cancel</button>
-          <span class="add-error" role="alert" data-testid="add-error"></span>
-        </form>
+        {% for t in topics %}
+        <a class="tab{% if active_tab == t.slug %} active{% endif %}" href="/news/{{ t.slug }}" data-testid="tab" data-tab="{{ t.slug }}"{% if active_tab == t.slug %} aria-current="page"{% endif %}>
+          {% if t.slug == 'technology' %}
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="9" y="9" width="6" height="6" rx="1" fill="currentColor"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          {% elif t.slug == 'health' %}
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M3 12h4l2-5 4 10 2-5h6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          {% endif %}
+          <span>{{ t.title }}<span class="tab-extra"> news</span></span>
+        </a>
+        {% endfor %}
+        <a class="tab{% if active_tab == 'portfolio' %} active{% endif %}" href="/portfolio" data-testid="tab" data-tab="portfolio"{% if active_tab == 'portfolio' %} aria-current="page"{% endif %}>
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 7V5.5A1.5 1.5 0 0 1 9.5 4h5A1.5 1.5 0 0 1 16 5.5V7" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+          <span>My Portfolio</span>
+        </a>
       </div>
     </nav>
   </header>

@@ -1,4 +1,4 @@
-"""Technology and Health sections at the top of the front page."""
+"""Section tabs: Financial news (default), Technology news, Health news and My Portfolio."""
 
 from fastapi.testclient import TestClient
 
@@ -33,37 +33,59 @@ class TestTopicsApi:
             assert c.get("/api/topics/technology").json()["count"] == 2
 
 
-class TestFrontPageTopics:
-    def test_tech_and_health_sections_come_before_financial_news(self, client):
+class TestTabs:
+    def test_every_page_has_the_four_tabs_in_order(self, client):
         text = client.get("/").text
-        tech = text.index('data-topic="technology"')
-        health = text.index('data-topic="health"')
-        finance = text.index("Latest financial news")
-        assert tech < health < finance
-        assert text.count('data-testid="topic-item"') == 5
-        assert "Chipmakers race to build faster AI accelerators" in text
-        assert "Study links daily walks to better sleep" in text
+        positions = [text.index(f'data-tab="{t}"') for t in ("financial", "technology", "health", "portfolio")]
+        assert positions == sorted(positions)
+        for label in ("Financial", "Technology", "Health"):
+            assert f'{label}<span class="tab-extra"> news</span>' in text
+        assert "<span>My Portfolio</span>" in text
 
-    def test_sections_hidden_when_one_source_is_picked(self, client):
-        assert 'data-testid="topic-sections"' not in client.get("/?source=cnbc").text
+    def test_financial_news_is_the_default_tab(self, client):
+        text = client.get("/").text
+        assert 'class="tab active" href="/" data-testid="tab" data-tab="financial" aria-current="page"' in text
+        assert "Latest financial news" in text
+        assert "Chipmakers race" not in text  # technology stays on its own tab
+
+    def test_ticker_page_highlights_my_portfolio(self, client):
+        assert 'data-tab="portfolio" aria-current="page"' in client.get("/ticker/AAPL").text
+
+
+class TestTopicPages:
+    def test_technology_page_shows_only_tech_news(self, client):
+        r = client.get("/news/technology")
+        assert r.status_code == 200
+        assert "Latest technology news" in r.text
+        assert 'data-tab="technology" aria-current="page"' in r.text
+        assert r.text.count('data-testid="news-item"') == 3
+        assert "Chipmakers race to build faster AI accelerators" in r.text
+        assert "Stocks rally to record" not in r.text
+
+    def test_health_page_shows_only_health_news(self, client):
+        r = client.get("/news/health")
+        assert "Latest health news" in r.text
+        assert r.text.count('data-testid="news-item"') == 2
+        assert "Study links daily walks to better sleep" in r.text
+        assert "Chipmakers race" not in r.text
 
     def test_empty_topic_shows_message(self, mock_http):
         mock_http.get(HEALTH_URL).respond(500)
         with TestClient(create_app(make_settings())) as c:
-            text = c.get("/").text
-        assert "No health headlines right now." in text
-        assert 'data-topic="technology"' in text
+            assert 'data-testid="no-news"' in c.get("/news/health").text
+
+    def test_unknown_topic_page_404(self, client):
+        assert client.get("/news/sports").status_code == 404
 
 
-class TestPortfolioTab:
-    def test_front_page_tickers_are_tucked_into_my_portfolio(self, client):
-        text = client.get("/").text
-        assert "My Portfolio" in text
-        assert 'aria-expanded="false"' in text
-        assert 'id="portfolio" data-testid="portfolio" hidden' in text
-        assert 'data-testid="portfolio-count">8<' in text
+class TestPortfolioPage:
+    def test_lists_every_default_ticker(self, client):
+        r = client.get("/portfolio")
+        assert r.status_code == 200
+        assert 'data-tab="portfolio" aria-current="page"' in r.text
+        assert r.text.count('data-testid="ticker-chip"') == 8
+        for s in ("AAPL", "META", "NVDA", "AMAT", "AVGO", "LLY", "GOOGL", "MSFT"):
+            assert f'data-symbol="{s}"' in r.text
 
-    def test_ticker_page_opens_portfolio(self, client):
-        text = client.get("/ticker/AAPL").text
-        assert 'aria-expanded="true"' in text
-        assert 'data-testid="portfolio" hidden' not in text
+    def test_news_pages_have_no_ticker_list(self, client):
+        assert 'data-testid="ticker-chip"' not in client.get("/").text
