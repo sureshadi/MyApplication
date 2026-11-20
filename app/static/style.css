@@ -1,5 +1,38 @@
-/* ---------- Design tokens ---------- */
+/* ---------- Design tokens ----------
+   Light is the base. Dark applies when the page has data-theme="dark" (set before first paint by the
+   inline script in base.html from the saved choice or the system setting), or, without JavaScript,
+   when the system prefers dark and the user has not picked light. */
 :root {
+  color-scheme: light;
+  --bg: #f5f7fb;
+  --bg-glow: radial-gradient(1200px 600px at 10% -10%, rgba(99, 102, 241, .10), transparent 60%),
+             radial-gradient(900px 500px at 100% 0%, rgba(34, 211, 238, .10), transparent 55%);
+  --surface: rgba(255, 255, 255, .85);
+  --surface-solid: #ffffff;
+  --surface-hover: #f0f3fa;
+  --border: rgba(15, 23, 42, .08);
+  --border-strong: rgba(15, 23, 42, .18);
+  --fg: #0f172a;
+  --muted: #5b6678;
+  --accent: #4f46e5;
+  --accent-2: #0e7490;
+  --gradient: linear-gradient(135deg, #6366f1 0%, #22d3ee 100%);
+  --up: #15803d;
+  --up-bg: rgba(22, 163, 74, .10);
+  --down: #be123c;
+  --down-bg: rgba(225, 29, 72, .10);
+  --shadow: 0 10px 30px -15px rgba(15, 23, 42, .25);
+  --shadow-pop: 0 18px 40px -16px rgba(15, 23, 42, .28);
+  /* Source brand colours, darker in light mode so the labels stay readable on white. */
+  --src-wsj: #b45309;
+  --src-nyt: #475569;
+  --src-cnbc: #0369a1;
+  --src-ft: #be123c;
+  --src-yahoo: #6d28d9;
+  --src-mw: #047857;
+  --radius: 14px;
+}
+:root[data-theme="dark"] {
   color-scheme: dark;
   --bg: #0a0e17;
   --bg-glow: radial-gradient(1200px 600px at 10% -10%, rgba(99, 102, 241, .18), transparent 60%),
@@ -13,33 +46,46 @@
   --muted: #8b95a8;
   --accent: #818cf8;
   --accent-2: #22d3ee;
-  --gradient: linear-gradient(135deg, #6366f1 0%, #22d3ee 100%);
   --up: #22c55e;
   --up-bg: rgba(34, 197, 94, .12);
   --down: #f43f5e;
   --down-bg: rgba(244, 63, 94, .12);
   --shadow: 0 10px 30px -12px rgba(0, 0, 0, .55);
-  --radius: 14px;
+  --shadow-pop: 0 18px 40px -12px rgba(0, 0, 0, .6);
+  --src-wsj: #f59e0b;
+  --src-nyt: #94a3b8;
+  --src-cnbc: #38bdf8;
+  --src-ft: #fb7185;
+  --src-yahoo: #a78bfa;
+  --src-mw: #34d399;
 }
-@media (prefers-color-scheme: light) {
-  :root {
-    color-scheme: light;
-    --bg: #f5f7fb;
-    --bg-glow: radial-gradient(1200px 600px at 10% -10%, rgba(99, 102, 241, .10), transparent 60%),
-               radial-gradient(900px 500px at 100% 0%, rgba(34, 211, 238, .10), transparent 55%);
-    --surface: rgba(255, 255, 255, .85);
-    --surface-solid: #ffffff;
-    --surface-hover: #f0f3fa;
-    --border: rgba(15, 23, 42, .08);
-    --border-strong: rgba(15, 23, 42, .18);
-    --fg: #0f172a;
-    --muted: #64748b;
-    --accent: #4f46e5;
-    --up: #16a34a;
-    --up-bg: rgba(22, 163, 74, .10);
-    --down: #e11d48;
-    --down-bg: rgba(225, 29, 72, .10);
-    --shadow: 0 10px 30px -15px rgba(15, 23, 42, .25);
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+    --bg: #0a0e17;
+    --bg-glow: radial-gradient(1200px 600px at 10% -10%, rgba(99, 102, 241, .18), transparent 60%),
+               radial-gradient(900px 500px at 100% 0%, rgba(34, 211, 238, .12), transparent 55%);
+    --surface: rgba(19, 25, 38, .78);
+    --surface-solid: #131926;
+    --surface-hover: #182033;
+    --border: rgba(148, 163, 184, .14);
+    --border-strong: rgba(148, 163, 184, .28);
+    --fg: #e6e9f0;
+    --muted: #8b95a8;
+    --accent: #818cf8;
+    --accent-2: #22d3ee;
+    --up: #22c55e;
+    --up-bg: rgba(34, 197, 94, .12);
+    --down: #f43f5e;
+    --down-bg: rgba(244, 63, 94, .12);
+    --shadow: 0 10px 30px -12px rgba(0, 0, 0, .55);
+    --shadow-pop: 0 18px 40px -12px rgba(0, 0, 0, .6);
+    --src-wsj: #f59e0b;
+    --src-nyt: #94a3b8;
+    --src-cnbc: #38bdf8;
+    --src-ft: #fb7185;
+    --src-yahoo: #a78bfa;
+    --src-mw: #34d399;
   }
 }
 
@@ -78,7 +124,7 @@ main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 8px; }
 .brand-name { font-weight: 800; font-size: 1.12rem; letter-spacing: -.02em; }
 .brand-name span { background: var(--gradient); -webkit-background-clip: text; background-clip: text; color: transparent; margin-left: 2px; }
 
-.search { position: relative; display: flex; gap: 8px; align-items: center; flex: 0 1 380px; }
+.search { position: relative; display: flex; gap: 8px; align-items: center; flex: 0 1 380px; margin-left: auto; }
 .search-icon { position: absolute; left: 12px; color: var(--muted); pointer-events: none; }
 .search input {
   flex: 1; min-width: 0; padding: 10px 12px 10px 36px; border-radius: 10px;
@@ -93,12 +139,29 @@ main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 8px; }
 }
 .search button:hover, .add-form button[type=submit]:hover, .button:hover { filter: brightness(1.1); }
 
+/* ---------- Dark mode toggle ---------- */
+.theme-toggle {
+  flex: none; display: grid; place-items: center; width: 40px; height: 40px; padding: 0;
+  border-radius: 10px; border: 1px solid var(--border-strong); background: var(--surface-solid); color: var(--fg);
+  cursor: pointer; transition: border-color .15s, color .15s, background .15s;
+}
+.theme-toggle:hover { border-color: var(--accent); color: var(--accent); }
+.theme-toggle:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); }
+/* Show the icon of the mode you would switch to: a moon in light mode, a sun in dark mode. */
+.theme-toggle .icon-sun { display: none; }
+[data-theme="dark"] .theme-toggle .icon-sun { display: block; }
+[data-theme="dark"] .theme-toggle .icon-moon { display: none; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .theme-toggle .icon-sun { display: block; }
+  :root:not([data-theme]) .theme-toggle .icon-moon { display: none; }
+}
+
 /* ---------- Search suggestions ---------- */
 .suggestions {
   position: absolute; z-index: 30; top: calc(100% + 6px); left: 0; right: 0;
   margin: 0; padding: 6px; list-style: none; max-height: 380px; overflow-y: auto;
   background: var(--surface-solid); border: 1px solid var(--border-strong); border-radius: 12px;
-  box-shadow: 0 18px 40px -12px rgba(0, 0, 0, .6);
+  box-shadow: var(--shadow-pop);
 }
 .suggestions[hidden] { display: none; }
 .suggestions [role=option] {
@@ -218,12 +281,12 @@ main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 8px; }
   content: ""; position: absolute; left: -12px; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0;
   background: var(--src, var(--gradient));
 }
-.source-link[data-source="Wall Street Journal"], .source-icon[data-source="Wall Street Journal"] { --src: #f59e0b; }
-.source-link[data-source="New York Times"], .source-icon[data-source="New York Times"] { --src: #94a3b8; }
-.source-link[data-source="CNBC"], .source-icon[data-source="CNBC"] { --src: #38bdf8; }
-.source-link[data-source="Financial Times"], .source-icon[data-source="Financial Times"] { --src: #fb7185; }
-.source-link[data-source="Yahoo Finance"], .source-icon[data-source="Yahoo Finance"] { --src: #a78bfa; }
-.source-link[data-source="MarketWatch"], .source-icon[data-source="MarketWatch"] { --src: #34d399; }
+.source-link[data-source="Wall Street Journal"], .source-icon[data-source="Wall Street Journal"] { --src: var(--src-wsj); }
+.source-link[data-source="New York Times"], .source-icon[data-source="New York Times"] { --src: var(--src-nyt); }
+.source-link[data-source="CNBC"], .source-icon[data-source="CNBC"] { --src: var(--src-cnbc); }
+.source-link[data-source="Financial Times"], .source-icon[data-source="Financial Times"] { --src: var(--src-ft); }
+.source-link[data-source="Yahoo Finance"], .source-icon[data-source="Yahoo Finance"] { --src: var(--src-yahoo); }
+.source-link[data-source="MarketWatch"], .source-icon[data-source="MarketWatch"] { --src: var(--src-mw); }
 .source-icon {
   flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px;
   font-size: .62rem; font-weight: 800; letter-spacing: .02em;
@@ -289,12 +352,12 @@ h2 { font-size: 1.3rem; letter-spacing: -.02em; margin: 28px 0 0; }
   padding: 3px 8px; border-radius: 6px; background: color-mix(in srgb, var(--src, var(--accent)) 16%, transparent);
   color: var(--src, var(--accent));
 }
-.news-source[data-source="Wall Street Journal"] { --src: #f59e0b; }
-.news-source[data-source="New York Times"] { --src: #94a3b8; }
-.news-source[data-source="CNBC"] { --src: #38bdf8; }
-.news-source[data-source="Financial Times"] { --src: #fb7185; }
-.news-source[data-source="Yahoo Finance"] { --src: #a78bfa; }
-.news-source[data-source="MarketWatch"] { --src: #34d399; }
+.news-source[data-source="Wall Street Journal"] { --src: var(--src-wsj); }
+.news-source[data-source="New York Times"] { --src: var(--src-nyt); }
+.news-source[data-source="CNBC"] { --src: var(--src-cnbc); }
+.news-source[data-source="Financial Times"] { --src: var(--src-ft); }
+.news-source[data-source="Yahoo Finance"] { --src: var(--src-yahoo); }
+.news-source[data-source="MarketWatch"] { --src: var(--src-mw); }
 .news-title { font-weight: 650; font-size: 1.02rem; line-height: 1.35; text-decoration: none; }
 .news-title:hover { color: var(--accent); }
 .news-summary {
@@ -341,7 +404,7 @@ h2 { font-size: 1.3rem; letter-spacing: -.02em; margin: 28px 0 0; }
 .site-footer { text-align: center; color: var(--muted); font-size: .8rem; padding: 32px 16px; }
 
 @media (max-width: 640px) {
-  .search { flex-basis: 100%; }
+  .search { flex-basis: 100%; order: 2; }
   .news-item.featured { padding: 20px; }
   .news-item.featured::after { position: static; order: -1; }
   .news-item.featured .news-title { padding-right: 0; }

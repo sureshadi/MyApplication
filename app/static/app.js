@@ -330,3 +330,52 @@ function attachSuggestions(input, list, onPick) {
   if ("ResizeObserver" in window) new ResizeObserver(update).observe(header);
   else window.addEventListener("resize", update);
 })();
+
+// Dark mode toggle. The inline script in <head> already applied the theme before the first
+// paint; this keeps the button in sync, saves an explicit choice, and follows the system
+// setting live until the user has picked one.
+(function () {
+  "use strict";
+  var KEY = "theme";
+  var root = document.documentElement;
+  var button = document.getElementById("theme-toggle");
+  var media = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+
+  function saved() {
+    try {
+      var t = localStorage.getItem(KEY);
+      return t === "light" || t === "dark" ? t : null;
+    } catch (e) { return null; }
+  }
+  function systemTheme() { return media && media.matches ? "dark" : "light"; }
+  function current() { return root.getAttribute("data-theme") === "dark" ? "dark" : "light"; }
+
+  function apply(theme) {
+    root.setAttribute("data-theme", theme);
+    if (!button) return;
+    var dark = theme === "dark";
+    button.setAttribute("aria-pressed", dark ? "true" : "false");
+    button.title = dark ? "Switch to light mode" : "Switch to dark mode";
+  }
+
+  apply(saved() || current() || systemTheme());
+
+  if (button) {
+    button.addEventListener("click", function () {
+      var next = current() === "dark" ? "light" : "dark";
+      apply(next);
+      try { localStorage.setItem(KEY, next); } catch (e) {}
+    });
+  }
+
+  if (media) {
+    var onChange = function () { if (!saved()) apply(systemTheme()); };
+    if (media.addEventListener) media.addEventListener("change", onChange);
+    else if (media.addListener) media.addListener(onChange);
+  }
+
+  // Another tab changed the choice: follow it.
+  window.addEventListener("storage", function (ev) {
+    if (ev.key === KEY) apply(saved() || systemTheme());
+  });
+})();
