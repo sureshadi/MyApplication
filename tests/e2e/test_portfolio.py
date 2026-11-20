@@ -115,3 +115,71 @@ def test_front_page_features_a_top_story(page: Page, live_server):
     featured = page.locator(".news-item.featured")
     expect(featured).to_have_count(1)
     expect(featured).to_contain_text("Stocks rally to record")
+
+
+def add_box(page: Page):
+    return page.get_by_role("combobox", name="New ticker symbol")
+
+
+def test_add_box_shows_suggestions_and_click_adds(page: Page, live_server):
+    open_portfolio(page, live_server)
+    page.get_by_role("button", name="Add ticker").click()
+    add_box(page).press_sequentially("tes", delay=40)
+    option = page.get_by_test_id("add-suggestions").get_by_role("option").first
+    expect(option).to_contain_text("TSLA")
+    expect(option).to_contain_text("Tesla, Inc.")
+    option.click()
+    expect(chip(page, "TSLA")).to_be_visible()
+    expect(chip(page, "TSLA").locator(".px")).to_have_text(f"{generated_price('TSLA'):,.2f}")
+    expect(page.get_by_test_id("add-form")).to_be_hidden()
+
+
+def test_add_box_keyboard_and_company_name(page: Page, live_server):
+    open_portfolio(page, live_server)
+    page.get_by_role("button", name="Add ticker").click()
+    add_box(page).press_sequentially("netflix", delay=40)
+    expect(page.get_by_test_id("add-suggestions").get_by_role("option").first).to_contain_text("NFLX")
+    add_box(page).press("Enter")  # company name + Enter adds the top match
+    expect(chip(page, "NFLX")).to_be_visible()
+
+    page.get_by_role("button", name="Add ticker").click()
+    add_box(page).press_sequentially("micro", delay=40)
+    expect(page.get_by_test_id("add-suggestions").get_by_role("option").nth(1)).to_contain_text("AMD")
+    add_box(page).press("ArrowDown")
+    add_box(page).press("ArrowDown")
+    add_box(page).press("Enter")
+    expect(chip(page, "AMD")).to_be_visible()
+    expect(chips(page)).to_have_count(len(DEFAULT) + 2)
+
+
+def test_add_box_escape_closes_list_first_then_form(page: Page, live_server):
+    open_portfolio(page, live_server)
+    page.get_by_role("button", name="Add ticker").click()
+    add_box(page).press_sequentially("ap", delay=40)
+    expect(page.get_by_test_id("add-suggestions")).to_be_visible()
+    add_box(page).press("Escape")
+    expect(page.get_by_test_id("add-suggestions")).to_be_hidden()
+    expect(page.get_by_test_id("add-form")).to_be_visible()
+    add_box(page).press("Escape")
+    expect(page.get_by_test_id("add-form")).to_be_hidden()
+
+
+def test_add_box_suggestion_for_ticker_already_owned_shows_message(page: Page, live_server):
+    open_portfolio(page, live_server)
+    page.get_by_role("button", name="Add ticker").click()
+    add_box(page).press_sequentially("apple", delay=40)
+    page.get_by_test_id("add-suggestions").get_by_role("option").first.click()
+    expect(page.get_by_test_id("add-error")).to_have_text("AAPL is already in your portfolio.")
+    expect(chips(page)).to_have_count(len(DEFAULT))
+
+
+def test_add_box_suggestions_fit_on_mobile(page: Page, live_server):
+    page.set_viewport_size({"width": 375, "height": 800})
+    open_portfolio(page, live_server)
+    page.get_by_role("button", name="Add ticker").click()
+    add_box(page).press_sequentially("app", delay=40)
+    list_box = page.get_by_test_id("add-suggestions")
+    expect(list_box.get_by_role("option").first).to_be_visible()
+    box = list_box.bounding_box()
+    assert box["x"] >= 0 and box["x"] + box["width"] <= 375
+    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
