@@ -50,3 +50,8 @@ def test_search_blank_or_unknown_name_shows_invalid_message(client):
     for q in ("   ", "zzzz qqqq"):
         r = client.get("/search", params={"symbol": q}, follow_redirects=False)
         assert r.status_code == 303 and r.headers["location"].startswith("/?error=invalid")
+
+
+def test_portfolio_add_box_has_suggestion_list(client):
+    html = client.get("/portfolio").text
+    assert 'aria-controls="add-suggestions"' in html and 'id="add-suggestions" role="listbox"' in html

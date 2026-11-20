@@ -172,10 +172,11 @@ main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 8px; }
 .add-btn:hover { color: var(--accent); border-color: var(--accent); background: transparent; }
 .add-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 16px; }
 .add-form[hidden] { display: none; }
+.add-field { position: relative; display: inline-block; width: 340px; max-width: 100%; }
+.add-field .suggestions { width: min(440px, calc(100vw - 32px)); right: auto; }
 .add-form input {
   padding: 9px 12px; border-radius: 10px; border: 1px solid var(--border-strong);
-  background: var(--surface-solid); color: var(--fg); font: inherit; width: 240px; max-width: 100%;
-  text-transform: uppercase;
+  background: var(--surface-solid); color: var(--fg); font: inherit; width: 100%;
 }
 .add-form button[type=submit] { padding: 9px 16px; }
 .add-cancel { padding: 9px 12px; border-radius: 10px; border: 1px solid var(--border); background: transparent; color: var(--muted); font: inherit; cursor: pointer; }
