@@ -6,6 +6,7 @@ A small web app that:
 - has a left sidebar to pick one news source (WSJ, NYT, CNBC, FT) or all of them; on phones it becomes a row of pills
 - has a top ticker bar with live prices for AAPL, META, NVDA, AMAT, AVGO, LLY, GOOGL and MSFT. Visitors can add tickers with **+** and remove them with **×**; their list is saved in their browser
 - given a ticker symbol (for example `AAPL`), shows the current quote, the change on the day, a one-month price chart and related headlines
+- has a light/dark mode toggle in the header on every page. It follows the system setting until the visitor picks one, then remembers that choice in their browser
 
 Built with FastAPI, Jinja templates, httpx and feedparser.
 
@@ -69,7 +70,7 @@ pytest -m e2e          # browser tests against a live local server
 | --- | --- |
 | `tests/unit` | Feed parsing, HTML cleaning, merging and de-duplication, quote parsing, symbol validation, cache |
 | `tests/api` | Every route: JSON shape, caching, error codes, empty states, HTML escaping |
-| `tests/e2e` | Playwright: front page, ticker search, ticker bar (prices, add, remove, saved after reload, errors), not-found and invalid input, mobile layout |
+| `tests/e2e` | Playwright: front page, ticker search, ticker bar (prices, add, remove, saved after reload, errors), not-found and invalid input, mobile layout, dark mode (system default, toggle, saved after reload) |
 
 ## CI
 
