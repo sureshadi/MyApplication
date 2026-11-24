@@ -1,4 +1,4 @@
-"""My Portfolio: clicking a ticker opens a side panel with its top 3 news, and market research shows
+"""Portfolio: clicking a ticker opens a side panel with its top 3 news, and market research shows
 one tab per company (with a risk dot) and one company's analysis at a time, risks first."""
 
 import json
@@ -118,8 +118,8 @@ def test_risks_come_first_then_key_numbers(page: Page, live_server):
     kpis = panel_el.get_by_test_id("kpi")
     expect(kpis.locator(".kpi-name")).to_have_text(["Revenue", "Operating margin", "Net income", "Free cash flow"])
     expect(kpis.first.locator(".kpi-value")).to_have_text("$102.00B")
-    expect(kpis.first.locator(".kpi-change")).to_have_text("+8.5%")
-    expect(kpis.nth(1).locator(".kpi-change")).to_have_text("+1.0 pp")
+    expect(kpis.first.locator(".kpi-change")).to_have_text("+8.5% vs prior year")
+    expect(kpis.nth(1).locator(".kpi-change")).to_have_text("+1.0 pp vs prior year")
 
 
 def test_clicking_a_tab_switches_company(page: Page, live_server):
@@ -149,10 +149,11 @@ def test_show_reveals_all_fundamentals_drivers_guidance_and_sources(page: Page, 
     expect(table).to_be_hidden()
     more.locator("summary").click()
     expect(table).to_be_visible()
-    expect(table.locator("thead th")).to_have_text(["Metric", "This period", "Prior year", "Change"])
+    expect(table.locator("thead th")).to_have_text(["Metric", "Prior year", "This period", "Change"])
     revenue = table.get_by_test_id("metric-row").first
     expect(revenue).to_contain_text("Quarter ended Sep 27, 2026 · GAAP")
-    expect(revenue.locator("td")).to_have_text(["$102.00B", "$94.00B", "+8.5%"])
+    # The earlier period is on the left, the latest on the right.
+    expect(revenue.locator("td")).to_have_text(["$94.00B", "$102.00B", "+8.5%"])
     expect(more.get_by_test_id("research-drivers")).to_be_visible()
     expect(more.get_by_test_id("research-guidance")).to_be_visible()
     expect(more.locator(".rc-sources a").first).to_have_attribute("href", re.compile(r"sec\.gov/Archives"))

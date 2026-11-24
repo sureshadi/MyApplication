@@ -1,11 +1,20 @@
 {% extends "base.html" %}
-{% block title %}My Portfolio · Market Headlines{% endblock %}
+{% block title %}Portfolio · Market Headlines{% endblock %}
 {% block content %}
 <section class="portfolio" data-testid="portfolio" data-default="{{ watchlist|join(',') }}">
   <div class="page-head portfolio-head">
     <div>
-      <h1>My Portfolio</h1>
-      <p class="subtitle"><span data-testid="portfolio-count">{{ watchlist|length }}</span> tickers with the latest prices. Click a ticker for its top news. Changes are saved in this browser.</p>
+      <h1>Portfolio</h1>
+      <p class="subtitle"><span data-testid="portfolio-count">{{ watchlist|length }}</span> tickers. Badges show the price change over <b data-testid="period-name">1 year</b>. Click a ticker for its top news. Changes are saved in this browser.</p>
+    </div>
+    <div class="period-picker" data-testid="period-picker">
+      <span class="period-label" id="period-label">Show changes over</span>
+      <div class="period-seg" role="radiogroup" aria-labelledby="period-label">
+        {% for key, label in [("1M", "1 month"), ("3M", "3 months"), ("6M", "6 months"), ("1Y", "1 year"), ("2Y", "2 years"), ("5Y", "5 years")] %}
+        <button type="button" role="radio" aria-checked="{{ 'true' if key == '1Y' else 'false' }}" tabindex="{{ '0' if key == '1Y' else '-1' }}"
+                data-period="{{ key }}" data-label="{{ label }}" title="{{ label }}" aria-label="{{ label }}" data-testid="period-option">{{ key }}</button>
+        {% endfor %}
+      </div>
     </div>
   </div>
   <div class="ticker-grid" id="watchlist" data-testid="watchlist">

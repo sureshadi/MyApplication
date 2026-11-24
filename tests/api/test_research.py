@@ -1,4 +1,4 @@
-"""/api/research/{symbol} and /api/ticker/{symbol}/news: what the My Portfolio research cards and side panel use."""
+"""/api/research/{symbol} and /api/ticker/{symbol}/news: what the Portfolio research cards and side panel use."""
 
 import httpx
 from fastapi.testclient import TestClient
@@ -72,7 +72,7 @@ def test_research_uses_claude_analyst_when_configured(mock_http):
     assert "Competition" in [r["title"] for r in data["risks"]]
     # Claude gets the company's recent headlines and last month's price move.
     assert seen[0]["recent_headlines"][0]["title"] == "Apple unveils new AI features for iPhone"
-    assert seen[0]["one_month_price_change_pct"] is not None
+    assert seen[0]["price_change_pct"] is not None and seen[0]["price_change_window"] == "1 year"
 
 
 def test_ticker_news_returns_top_3_newest_first(client):
@@ -110,3 +110,34 @@ def test_ticker_news_matches_company_name_from_the_quote(client):
     # AAPL's quote name is "Apple Inc."; both AAPL headlines say "Apple", not "AAPL".
     titles = [i["title"] for i in client.get("/api/ticker/AAPL/news").json()["items"]]
     assert titles == ["Apple unveils new AI features for iPhone", "Analysts raise Apple price target"]
+
+
+def test_research_period_sets_the_comparison(client):
+    r = client.get("/api/research/AAPL?period=3m")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["comparison"]["label"] == "Prior quarter"
+    assert data["metrics"][0]["prior"] == 96.9e9
+    assert "quarter over quarter" in data["headline"]
+    assert client.get("/api/research/AAPL").json()["comparison"]["key"] == "1Y"
+
+
+def test_research_rejects_an_unknown_period(client):
+    r = client.get("/api/research/AAPL?period=10Y")
+    assert r.status_code == 400 and "1M, 3M, 6M, 1Y, 2Y, 5Y" in r.json()["detail"]
+
+
+def test_performance_lists_every_period(client):
+    r = client.get("/api/performance?symbols=AAPL,LOSS,NOPE1")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["periods"] == ["1M", "3M", "6M", "1Y", "2Y", "5Y"]
+    by_symbol = {p["symbol"]: p for p in data["performance"]}
+    assert set(by_symbol["AAPL"]["changes"]) == set(data["periods"])
+    assert all(v > 0 for v in by_symbol["AAPL"]["changes"].values())
+    assert all(v < 0 for v in by_symbol["LOSS"]["changes"].values())
+    assert by_symbol["NOPE1"] == {"symbol": "NOPE1", "changes": None, "error": "not_found"}
+
+
+def test_performance_rejects_bad_symbols(client):
+    assert client.get("/api/performance?symbols=bad$").status_code == 400

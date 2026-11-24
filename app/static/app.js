@@ -1,5 +1,5 @@
 // Ticker suggestions as you type, like Google. Used by the header search box and the
-// My Portfolio "Add ticker" box. onPick(symbol) runs when a suggestion is chosen.
+// Portfolio "Add ticker" box. onPick(symbol) runs when a suggestion is chosen.
 function attachSuggestions(input, list, onPick) {
   "use strict";
   var items = [];
@@ -146,7 +146,7 @@ function attachSuggestions(input, list, onPick) {
   }
 })();
 
-// My Portfolio page: every ticker with live prices; add and remove tickers, saved in this browser.
+// Portfolio page: every ticker with live prices; add and remove tickers, saved in this browser.
 (function () {
   "use strict";
 
@@ -186,7 +186,19 @@ function attachSuggestions(input, list, onPick) {
 
   var watchlist = load();
   // Set further down by the market research section.
-  var onAdd = function () {}, onRemove = function () {};
+  var onAdd = function () {}, onRemove = function () {}, onPeriod = function () {};
+
+  // Period picker: badges and research compare over 1M ... 5Y, saved in this browser.
+  var PERIOD_KEY = "mh.period.v1";
+  var periodBtns = Array.prototype.slice.call(bar.querySelectorAll("[data-testid=period-option]"));
+  var periodNameEl = bar.querySelector("[data-testid=period-name]");
+  var PERIODS = periodBtns.map(function (b) { return b.dataset.period; });
+  var period = (function () {
+    try { var p = window.localStorage.getItem(PERIOD_KEY); if (PERIODS.indexOf(p) !== -1) return p; } catch (e) { /* ignore */ }
+    return "1Y";
+  })();
+  var quotes = {};       // symbol -> latest quote
+  var performance = {};  // symbol -> {1M: pct, ...}, or null when unavailable
 
   function chip(symbol) {
     var el = document.createElement("div");
@@ -215,6 +227,7 @@ function attachSuggestions(input, list, onPick) {
       save(watchlist);
       el.remove();
       updateCount();
+      delete quotes[symbol]; delete performance[symbol];
       onRemove(symbol);
     });
 
@@ -234,22 +247,75 @@ function attachSuggestions(input, list, onPick) {
   }
 
   function paint(q) {
+    quotes[q.symbol] = q;
     var el = chipsEl.querySelector('[data-symbol="' + q.symbol + '"]');
     if (!el) return;
-    var px = el.querySelector(".px"), chg = el.querySelector(".chg");
+    var px = el.querySelector(".px");
     var name = el.querySelector(".name");
     if (name && q.name) name.textContent = q.name;
-    if (q.error) {
-      px.textContent = "";
-      chg.textContent = "n/a";
-      chg.className = "chg na";
+    px.textContent = q.error ? "" : fmt(q.price);
+    paintBadge(q.symbol);
+  }
+
+  // The badge shows the price change over the chosen period.
+  function paintBadge(symbol) {
+    var el = chipsEl.querySelector('[data-symbol="' + symbol + '"]');
+    if (!el) return;
+    var chg = el.querySelector(".chg"), q = quotes[symbol];
+    var label = periodLabel(period);
+    if ((q && q.error) || performance[symbol] === null) {
+      chg.textContent = "n/a"; chg.className = "chg na"; chg.title = "No price history";
       return;
     }
-    px.textContent = fmt(q.price);
-    var pct = q.change_percent;
+    if (!performance[symbol]) { chg.textContent = ""; chg.className = "chg"; return; }
+    var pct = performance[symbol][period];
+    if (pct == null) {
+      chg.textContent = "–"; chg.className = "chg na"; chg.title = "No price history for " + label;
+      return;
+    }
     chg.textContent = (pct > 0 ? "+" : "") + pct.toFixed(2) + "%";
     chg.className = "chg " + (pct > 0 ? "up" : pct < 0 ? "down" : "flat");
+    chg.title = "Price change over " + label;
   }
+
+  function periodLabel(p) {
+    var b = periodBtns.filter(function (x) { return x.dataset.period === p; })[0];
+    return b ? b.dataset.label : p;
+  }
+
+  function fetchPerformance(symbols) {
+    if (!symbols.length) return Promise.resolve();
+    return fetch("/api/performance?symbols=" + encodeURIComponent(symbols.join(",")))
+      .then(function (r) { return r.ok ? r.json() : { performance: [] }; })
+      .then(function (data) {
+        data.performance.forEach(function (p) { performance[p.symbol] = p.error ? null : p.changes; paintBadge(p.symbol); });
+      })
+      .catch(function () { /* badges stay empty; the next refresh tries again */ });
+  }
+
+  function setPeriod(p, focus) {
+    period = p;
+    try { window.localStorage.setItem(PERIOD_KEY, p); } catch (e) { /* ignore */ }
+    periodBtns.forEach(function (b) {
+      var on = b.dataset.period === p;
+      b.setAttribute("aria-checked", on ? "true" : "false");
+      b.setAttribute("tabindex", on ? "0" : "-1");
+      if (on && focus) b.focus();
+    });
+    if (periodNameEl) periodNameEl.textContent = periodLabel(p);
+    watchlist.forEach(paintBadge);
+    onPeriod(p);
+  }
+
+  periodBtns.forEach(function (b, i) {
+    b.addEventListener("click", function () { if (b.dataset.period !== period) setPeriod(b.dataset.period); });
+    b.addEventListener("keydown", function (ev) {
+      var next = ev.key === "ArrowRight" || ev.key === "ArrowDown" ? i + 1 : ev.key === "ArrowLeft" || ev.key === "ArrowUp" ? i - 1 : null;
+      if (next === null) return;
+      ev.preventDefault();
+      setPeriod(PERIODS[(next + PERIODS.length) % PERIODS.length], true);
+    });
+  });
 
   function fetchQuotes(symbols) {
     if (!symbols.length) return Promise.resolve([]);
@@ -292,6 +358,7 @@ function attachSuggestions(input, list, onPick) {
         chipsEl.insertBefore(chip(symbol), addBtn);
         updateCount();
         paint(q);
+        fetchPerformance([symbol]);
         closeForm();
         onAdd(symbol);
       })
@@ -423,8 +490,12 @@ function attachSuggestions(input, list, onPick) {
     return money(v);
   }
 
+  function comparisonOf(a) {
+    return a.comparison || { key: "1Y", label: "Prior year", phrase: "year over year", price_window: "1 year" };
+  }
+
   function changeText(m) {
-    if (m.change == null) return m.prior == null ? "No prior year" : "n/m";
+    if (m.change == null) return m.prior == null ? "No earlier figure" : "n/m";
     return (m.change > 0 ? "+" : "") + m.change.toFixed(1) + (m.change_unit === "pp" ? " pp" : "%");
   }
 
@@ -521,7 +592,8 @@ function attachSuggestions(input, list, onPick) {
       if (!m) return;
       var tile = el("div", "kpi");
       tile.setAttribute("data-testid", "kpi");
-      tile.append(el("span", "kpi-name", name), el("b", "kpi-value", value(m, m.current)), el("span", "kpi-change " + changeClass(m), changeText(m)));
+      var vs = m.change != null ? " vs " + comparisonOf(a).label.toLowerCase() : "";
+      tile.append(el("span", "kpi-name", name), el("b", "kpi-value", value(m, m.current)), el("span", "kpi-change " + changeClass(m), changeText(m) + vs));
       grid.append(tile);
     });
     return grid;
@@ -532,7 +604,7 @@ function attachSuggestions(input, list, onPick) {
     var table = el("table", "rc-metrics");
     table.setAttribute("data-testid", "research-metrics");
     var thead = el("thead"), tr = el("tr");
-    ["Metric", "This period", "Prior year", "Change"].forEach(function (h) { var th = el("th", null, h); th.scope = "col"; tr.append(th); });
+    ["Metric", comparisonOf(a).label, "This period", "Change"].forEach(function (h) { var th = el("th", null, h); th.scope = "col"; tr.append(th); });
     thead.append(tr); table.append(thead);
     var tbody = el("tbody");
     a.metrics.forEach(function (m) {
@@ -541,7 +613,7 @@ function attachSuggestions(input, list, onPick) {
       var th = el("th"); th.scope = "row";
       th.append(el("span", "rc-metric", m.name), el("span", "rc-period", m.period + " · " + m.basis));
       var ch = el("td", "rc-change " + changeClass(m), m.change == null ? "n/a" : changeText(m));
-      row.append(th, el("td", null, value(m, m.current)), el("td", null, value(m, m.prior)), ch);
+      row.append(th, el("td", null, value(m, m.prior)), el("td", null, value(m, m.current)), ch);
       tbody.append(row);
     });
     table.append(tbody); wrap.append(table);
@@ -561,7 +633,7 @@ function attachSuggestions(input, list, onPick) {
     drivers.setAttribute("data-testid", "research-drivers");
     drivers.append(el("h4", "rp-h", a.analyst === "claude" ? "What drove the results" : "What changed"));
     var dl = el("ul");
-    (a.drivers.length ? a.drivers : ["No year-over-year comparison is available."]).forEach(function (d) { dl.append(el("li", null, d)); });
+    (a.drivers.length ? a.drivers : ["No comparison with " + comparisonOf(a).label.toLowerCase() + " is available."]).forEach(function (d) { dl.append(el("li", null, d)); });
     drivers.append(dl);
     var guidance = el("section", "rc-guidance");
     guidance.setAttribute("data-testid", "research-guidance");
@@ -616,7 +688,13 @@ function attachSuggestions(input, list, onPick) {
     var headline = el("p", "rp-headline", a.headline);
     headline.setAttribute("data-testid", "research-headline");
     var meta = el("p", "rp-meta", (a.period ? a.period + " · " : "") + "GAAP · " + (a.analyst === "claude" ? "AI analysis" : "Rule-based analysis"));
-    var parts = [panelHead(selected, a.name, riskLevel(a)), headline, meta, riskList(a)];
+    var c = comparisonOf(a);
+    var compare = el("p", "rp-compare",
+      (c.key === "1M" ? "Companies report every quarter, so for 1 month the fundamentals compare with the prior quarter. " :
+        "Fundamentals compare the latest period with the same period " + (c.earlier || "a year earlier") + ". ") +
+      "The share price uses " + c.price_window + ".");
+    compare.setAttribute("data-testid", "research-compare");
+    var parts = [panelHead(selected, a.name, riskLevel(a)), headline, meta, compare, riskList(a)];
     if (a.metrics.length) parts.push(kpiTiles(a));
     var more = moreSection(a);
     if (openMore) more.open = true;
@@ -629,16 +707,17 @@ function attachSuggestions(input, list, onPick) {
     while (running < MAX_PARALLEL && queue.length) {
       (function (symbol) {
         running++;
-        fetch("/api/research/" + encodeURIComponent(symbol))
+        var asked = period;
+        fetch("/api/research/" + encodeURIComponent(symbol) + "?period=" + asked)
           .then(function (r) {
             return r.json().catch(function () { return {}; }).then(function (data) { return { ok: r.ok, data: data }; });
           })
           .then(function (res) {
-            if (!tabFor(symbol)) return;
+            if (!tabFor(symbol) || asked !== period) return;
             if (res.ok) analyses[symbol] = res.data;
             else failures[symbol] = res.data.detail || "Analysis isn't available right now.";
           })
-          .catch(function () { failures[symbol] = "Analysis isn't available right now. Please try again later."; })
+          .catch(function () { if (asked === period) failures[symbol] = "Analysis isn't available right now. Please try again later."; })
           .then(function () {
             running--;
             paintTab(symbol);
@@ -671,13 +750,27 @@ function attachSuggestions(input, list, onPick) {
     }
   }
 
+  // A new period re-runs the research for every company (the server caches each period).
+  function periodChanged() {
+    if (!tabsEl) return;
+    analyses = {}; failures = {};
+    queue = Array.prototype.map.call(tabsEl.querySelectorAll("[role=tab]"), function (t) { return t.dataset.symbol; });
+    queue.forEach(paintTab);
+    renderPanel();
+    pump();
+  }
+
   onAdd = addResearch;
   onRemove = removeResearch;
+  onPeriod = periodChanged;
 
   render();
+  setPeriod(period);
   fetchQuotes(watchlist);
+  fetchPerformance(watchlist);
   watchlist.forEach(addResearch);
   setInterval(function () { fetchQuotes(watchlist); }, REFRESH_MS);
+  setInterval(function () { fetchPerformance(watchlist); }, 10 * REFRESH_MS);
 })();
 
 // Show "5m ago" style times next to headlines.

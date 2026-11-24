@@ -1,6 +1,9 @@
+from datetime import datetime, timezone
+
 import httpx
 import pytest
 
+from app import stocks
 from app.stocks import (
     InvalidSymbol,
     QuoteNotFound,
@@ -98,3 +101,37 @@ class TestParseSymbolList:
 
         with pytest.raises(InvalidSymbol, match="At most 2"):
             parse_symbol_list("A,B,C", max_count=2)
+
+
+class TestPerformance:
+    @staticmethod
+    def chart(closes_by_day: dict[str, float], price: float) -> dict:
+        days = sorted(closes_by_day)
+        ts = [int(datetime.fromisoformat(d).replace(tzinfo=timezone.utc).timestamp()) for d in days]
+        return {"chart": {"error": None, "result": [{
+            "meta": {"regularMarketPrice": price},
+            "timestamp": ts,
+            "indicators": {"quote": [{"close": [closes_by_day[d] for d in days]}]},
+        }]}}
+
+    def test_change_from_the_close_on_or_before_each_period_start(self):
+        data = self.chart({
+            "2021-11-20": 50.0, "2024-11-22": 80.0, "2025-11-21": 100.0, "2026-05-22": 110.0,
+            "2026-08-21": 115.0, "2026-10-23": 118.0, "2026-11-24": 120.0,
+        }, price=120.0)
+        perf = stocks.parse_performance(data)
+        assert perf == {"1M": 1.69, "3M": 4.35, "6M": 9.09, "1Y": 20.0, "2Y": 50.0, "5Y": 140.0}
+
+    def test_short_history_leaves_older_periods_empty(self):
+        perf = stocks.parse_performance(self.chart({"2026-08-26": 10.0, "2026-11-24": 12.0}, price=12.0))
+        # History starting two days after the 3M start still counts (weekends, holidays).
+        assert perf["1M"] == 20.0 and perf["3M"] == 20.0
+        assert perf["6M"] is None and perf["5Y"] is None
+
+    def test_month_arithmetic_clamps_to_the_last_day(self):
+        assert stocks._months_before(datetime(2026, 3, 31), 1) == datetime(2026, 2, 28)
+        assert stocks._months_before(datetime(2026, 1, 15), 60) == datetime(2021, 1, 15)
+
+    def test_unknown_symbol(self):
+        with pytest.raises(stocks.QuoteNotFound):
+            stocks.parse_performance({"chart": {"error": {"code": "Not Found"}, "result": None}})

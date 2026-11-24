@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from pathlib import Path
 
 import httpx
@@ -68,9 +69,7 @@ def install_default_routes(router: respx.MockRouter) -> None:
         return_value=httpx.Response(200, content=fixture_bytes("ticker_news_amd.xml"))
     )
     router.get(TICKER_NEWS_URL.format(symbol="ZZZZ")).mock(return_value=httpx.Response(200, content=b"<rss/>"))
-    router.get(YAHOO_CHART_URL.format(symbol="AAPL")).mock(
-        return_value=httpx.Response(200, json=fixture_json("yahoo_chart_aapl.json"))
-    )
+    router.get(YAHOO_CHART_URL.format(symbol="AAPL")).mock(side_effect=_aapl_chart)
     router.get(YAHOO_CHART_URL.format(symbol="ZZZZ")).mock(
         return_value=httpx.Response(404, json=fixture_json("yahoo_chart_notfound.json"))
     )
@@ -143,11 +142,41 @@ def generated_price(symbol: str) -> float:
     return float(100 + sum(ord(c) for c in symbol) % 400)
 
 
+def history_drift(symbol: str) -> float:
+    """How much higher (positive) or lower the price was five years ago, as a fraction of today's.
+
+    LOSS was higher, so it is down over every period; the rest were lower, so they are up."""
+    return 0.6 if symbol == "LOSS" else -0.3 - (sum(ord(c) for c in symbol) % 5) * 0.1
+
+
+def _history_chart(symbol: str, price: float, name: str) -> httpx.Response:
+    """Five years of weekly closes (what the period picker asks for), ending today."""
+    now = int(time.time()) // 86400 * 86400
+    weeks = 262
+    ts = [now - 7 * 86400 * (weeks - 1 - i) for i in range(weeks)]
+    closes = [round(price * (1 + history_drift(symbol) * (now - t) / (1826 * 86400)), 4) for t in ts]
+    return httpx.Response(200, json={"chart": {"error": None, "result": [{
+        "meta": {"symbol": symbol, "currency": "USD", "longName": name, "regularMarketPrice": price},
+        "timestamp": ts,
+        "indicators": {"quote": [{"close": closes}]},
+    }]}})
+
+
+def _aapl_chart(request: httpx.Request) -> httpx.Response:
+    data = fixture_json("yahoo_chart_aapl.json")
+    if request.url.params.get("range") == "5y":
+        meta = data["chart"]["result"][0]["meta"]
+        return _history_chart("AAPL", meta["regularMarketPrice"], meta.get("longName") or "Apple Inc.")
+    return httpx.Response(200, json=data)
+
+
 def _generated_chart(request: httpx.Request) -> httpx.Response:
     symbol = re.search(r"/chart/([^/?]+)", str(request.url)).group(1)
     if symbol.startswith("NOPE"):
         return httpx.Response(404, json=fixture_json("yahoo_chart_notfound.json"))
     price = generated_price(symbol)
+    if request.url.params.get("range") == "5y":
+        return _history_chart(symbol, price, f"{symbol} Corp")
     data = {"chart": {"error": None, "result": [{
         "meta": {"symbol": symbol, "currency": "USD", "longName": f"{symbol} Corp", "regularMarketPrice": price},
         "timestamp": [1794931200, 1795017600],

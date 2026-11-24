@@ -1,4 +1,4 @@
-"""My Portfolio tab: every ticker shows at once with live prices; add and remove are saved in this browser."""
+"""Portfolio tab: every ticker shows at once with live prices; add and remove are saved in this browser."""
 
 import re
 
@@ -22,7 +22,7 @@ def chip(page: Page, symbol: str):
 
 def open_portfolio(page: Page, live_server: str):
     page.goto(live_server)
-    page.get_by_role("link", name="My Portfolio").click()
+    page.get_by_role("link", name="Portfolio").click()
     expect(page).to_have_url(re.compile(r"/portfolio$"))
 
 
@@ -36,7 +36,7 @@ def add_ticker(page: Page, symbol: str):
 def test_clicking_my_portfolio_shows_every_ticker(page: Page, live_server, width):
     page.set_viewport_size({"width": width, "height": 900})
     open_portfolio(page, live_server)
-    expect(page.get_by_role("heading", name="My Portfolio")).to_be_visible()
+    expect(page.get_by_role("heading", name="Portfolio")).to_be_visible()
     expect(chips(page)).to_have_count(len(DEFAULT))
     expect(chips(page).locator(".sym")).to_have_text(DEFAULT)
     # Every ticker is laid out on screen (wrapping grid), none hidden in a sideways scroller.
@@ -49,7 +49,8 @@ def test_clicking_my_portfolio_shows_every_ticker(page: Page, live_server, width
 def test_portfolio_shows_live_prices(page: Page, live_server):
     open_portfolio(page, live_server)
     expect(chip(page, "AAPL").locator(".px")).to_have_text("232.50")
-    expect(chip(page, "AAPL").locator(".chg")).to_have_text("+1.09%")
+    # The badge is the price change over the chosen period (1 year by default).
+    expect(chip(page, "AAPL").locator(".chg")).to_have_text(re.compile(r"^\+\d+\.\d\d%$"))
     expect(chip(page, "AAPL").locator(".chg")).to_have_class(re.compile(r"\bup\b"))
     expect(chip(page, "NVDA").locator(".px")).to_have_text(f"{generated_price('NVDA'):,.2f}")
     expect(chip(page, "NVDA").locator(".name")).to_have_text("NVDA Corp")

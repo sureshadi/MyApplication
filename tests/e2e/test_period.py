@@ -1,0 +1,105 @@
+"""Portfolio period picker: 1M, 3M, 6M, 1Y, 2Y or 5Y sets the card badges and what the research compares with."""
+
+import json
+import re
+
+import pytest
+from playwright.sync_api import Page, expect
+
+pytestmark = pytest.mark.e2e
+
+
+def open_portfolio(page: Page, live_server: str, tickers=("AAPL", "LOSS")):
+    page.add_init_script(f"if (!sessionStorage.getItem('seeded')) {{ localStorage.setItem('mh.watchlist.v1', '{json.dumps(list(tickers))}'); sessionStorage.setItem('seeded', '1'); }}")
+    page.goto(f"{live_server}/portfolio")
+
+
+def option(page: Page, key: str):
+    return page.locator(f'[data-testid="period-option"][data-period="{key}"]')
+
+
+def badge(page: Page, symbol: str):
+    return page.locator(f'[data-testid="ticker-chip"][data-symbol="{symbol}"] .chg')
+
+
+def research(page: Page):
+    return page.get_by_test_id("research-panel")
+
+
+def show_table(page: Page):
+    more = research(page).get_by_test_id("research-more")
+    more.locator("summary").click()
+    return more.get_by_test_id("research-metrics")
+
+
+def test_one_year_is_the_default(page: Page, live_server):
+    open_portfolio(page, live_server)
+    expect(page.get_by_role("heading", name="Portfolio", exact=True)).to_be_visible()
+    expect(page.get_by_test_id("period-option")).to_have_text(["1M", "3M", "6M", "1Y", "2Y", "5Y"])
+    expect(option(page, "1Y")).to_have_attribute("aria-checked", "true")
+    expect(page.get_by_test_id("period-name")).to_have_text("1 year")
+    expect(research(page).get_by_test_id("research-compare")).to_contain_text("a year earlier")
+
+
+def test_badges_follow_the_period(page: Page, live_server):
+    open_portfolio(page, live_server)
+    expect(badge(page, "AAPL")).to_have_class(re.compile(r"\bup\b"))
+    one_year = badge(page, "AAPL").inner_text()
+    option(page, "5Y").click()
+    expect(option(page, "5Y")).to_have_attribute("aria-checked", "true")
+    expect(option(page, "1Y")).to_have_attribute("aria-checked", "false")
+    expect(page.get_by_test_id("period-name")).to_have_text("5 years")
+    expect(badge(page, "AAPL")).not_to_have_text(one_year)
+    expect(badge(page, "AAPL")).to_have_attribute("title", "Price change over 5 years")
+    # LOSS traded higher in the past, so it is down over every period.
+    expect(badge(page, "LOSS")).to_have_text(re.compile(r"^-\d+\.\d\d%$"))
+    expect(badge(page, "LOSS")).to_have_class(re.compile(r"\bdown\b"))
+
+
+def test_research_compares_with_the_chosen_period(page: Page, live_server):
+    open_portfolio(page, live_server)
+    expect(research(page).get_by_test_id("research-kpis")).to_be_visible()
+    option(page, "3M").click()
+    panel = research(page)
+    expect(panel.get_by_test_id("research-compare")).to_contain_text("a quarter earlier")
+    expect(panel.get_by_test_id("research-headline")).to_contain_text("quarter over quarter")
+    expect(panel.get_by_test_id("kpi").first.locator(".kpi-change")).to_have_text("+5.3% vs prior quarter")
+    table = show_table(page)
+    expect(table.locator("thead th")).to_have_text(["Metric", "Prior quarter", "This period", "Change"])
+    expect(table.get_by_test_id("metric-row").first.locator("td")).to_have_text(["$96.90B", "$102.00B", "+5.3%"])
+
+    option(page, "5Y").click()
+    expect(table.locator("thead th").nth(1)).to_have_text("5 years ago")
+    expect(research(page).get_by_test_id("metric-row").first.locator("td")).to_have_text(["$56.40B", "$102.00B", "+80.9%"])
+
+
+def test_one_month_explains_that_filings_are_quarterly(page: Page, live_server):
+    open_portfolio(page, live_server)
+    option(page, "1M").click()
+    expect(research(page).get_by_test_id("research-compare")).to_contain_text("Companies report every quarter")
+
+
+def test_share_price_risk_uses_the_period(page: Page, live_server):
+    open_portfolio(page, live_server, ("LOSS",))
+    option(page, "5Y").click()
+    risks = research(page).get_by_test_id("risk")
+    expect(risks.filter(has_text="Share price fell sharply")).to_contain_text("over the last 5 years")
+
+
+def test_choice_is_saved_and_arrow_keys_move_it(page: Page, live_server):
+    open_portfolio(page, live_server)
+    option(page, "6M").click()
+    page.reload()
+    expect(option(page, "6M")).to_have_attribute("aria-checked", "true")
+    expect(page.get_by_test_id("period-name")).to_have_text("6 months")
+    option(page, "6M").focus()
+    page.keyboard.press("ArrowRight")
+    expect(option(page, "1Y")).to_be_focused()
+    expect(option(page, "1Y")).to_have_attribute("aria-checked", "true")
+
+
+def test_picker_fits_on_a_phone(page: Page, live_server):
+    page.set_viewport_size({"width": 390, "height": 844})
+    open_portfolio(page, live_server)
+    expect(page.get_by_test_id("period-picker")).to_be_in_viewport()
+    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
