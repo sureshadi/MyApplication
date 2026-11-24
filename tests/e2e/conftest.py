@@ -28,7 +28,7 @@ def live_server():
     with respx.mock(assert_all_called=False) as router:
         router.route(host="127.0.0.1").pass_through()
         install_default_routes(router)
-        server = uvicorn.Server(uvicorn.Config(create_app(make_settings()), host="127.0.0.1", port=port, log_level="warning"))
+        server = uvicorn.Server(uvicorn.Config(create_app(make_settings(), analyst_factory=None), host="127.0.0.1", port=port, log_level="warning"))
         thread = threading.Thread(target=server.run, daemon=True)
         thread.start()
         deadline = time.time() + 10

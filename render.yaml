@@ -15,3 +15,7 @@ services:
         value: 3.12.8
       - key: FINNHUB_API_KEY
         sync: false # optional: set in the Render dashboard for Finnhub quotes
+      - key: SEC_USER_AGENT
+        sync: false # "Your Name you@example.com": SEC EDGAR asks automated clients to identify themselves
+      - key: ANTHROPIC_API_KEY
+        sync: false # optional: Claude-written drivers, guidance and risks in the market research

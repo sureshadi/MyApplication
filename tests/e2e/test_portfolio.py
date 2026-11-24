@@ -55,9 +55,10 @@ def test_portfolio_shows_live_prices(page: Page, live_server):
     expect(chip(page, "NVDA").locator(".name")).to_have_text("NVDA Corp")
 
 
-def test_clicking_a_ticker_opens_its_page(page: Page, live_server):
+def test_ticker_side_panel_links_to_its_full_page(page: Page, live_server):
     open_portfolio(page, live_server)
     chip(page, "MSFT").get_by_role("link").click()
+    page.get_by_test_id("panel-more").click()
     expect(page).to_have_url(re.compile(r"/ticker/MSFT$"))
     expect(page.get_by_test_id("quote-symbol")).to_have_text("MSFT")
     expect(page.locator('[data-tab="portfolio"]')).to_have_attribute("aria-current", "page")

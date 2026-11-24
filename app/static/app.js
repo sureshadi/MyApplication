@@ -185,6 +185,8 @@ function attachSuggestions(input, list, onPick) {
   }
 
   var watchlist = load();
+  // Set further down by the market research section.
+  var onAdd = function () {}, onRemove = function () {};
 
   function chip(symbol) {
     var el = document.createElement("div");
@@ -213,6 +215,7 @@ function attachSuggestions(input, list, onPick) {
       save(watchlist);
       el.remove();
       updateCount();
+      onRemove(symbol);
     });
 
     el.append(link, remove);
@@ -290,13 +293,318 @@ function attachSuggestions(input, list, onPick) {
         updateCount();
         paint(q);
         closeForm();
+        onAdd(symbol);
       })
       .catch(function () { errorEl.textContent = "Couldn't add " + symbol + ". Please try again."; })
       .then(function () { submit.disabled = false; });
   });
 
+  // ---------- Side panel: top 3 news for a clicked ticker ----------
+  var panel = document.querySelector("[data-testid=news-panel]");
+  var backdrop = document.querySelector("[data-testid=news-panel-backdrop]");
+  var panelSeq = 0;
+  var lastFocus = null;
+
+  function relTime(iso) {
+    var d = new Date(iso);
+    if (isNaN(d)) return "";
+    var mins = Math.round((Date.now() - d) / 60000);
+    return mins < 1 ? "just now" : mins < 60 ? mins + "m ago" : mins < 1440 ? Math.floor(mins / 60) + "h ago"
+      : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }
+
+  function panelMessage(text) {
+    var li = document.createElement("li");
+    li.className = "panel-empty";
+    li.textContent = text;
+    return li;
+  }
+
+  function closePanel() {
+    if (!panel || panel.hidden) return;
+    panel.hidden = true;
+    backdrop.hidden = true;
+    document.querySelectorAll(".is-open[data-symbol]").forEach(function (el) { el.classList.remove("is-open"); });
+    if (lastFocus && document.contains(lastFocus)) lastFocus.focus();
+  }
+
+  function openNews(symbol, name) {
+    if (!panel) { window.location.href = "/ticker/" + encodeURIComponent(symbol); return; }
+    lastFocus = document.activeElement;
+    document.querySelectorAll(".is-open[data-symbol]").forEach(function (el) { el.classList.remove("is-open"); });
+    var card = chipsEl.querySelector('[data-symbol="' + symbol + '"]');
+    if (card) card.classList.add("is-open");
+    panel.querySelector("[data-testid=news-panel-symbol]").textContent = symbol;
+    panel.querySelector("[data-testid=news-panel-name]").textContent = name || "";
+    panel.querySelector("[data-testid=panel-more]").href = "/ticker/" + encodeURIComponent(symbol);
+    var list = panel.querySelector("[data-testid=panel-news]");
+    list.replaceChildren(panelMessage("Loading headlines…"));
+    panel.hidden = false;
+    backdrop.hidden = false;
+    panel.querySelector("[data-testid=news-panel-close]").focus();
+
+    var mine = ++panelSeq;
+    fetch("/api/ticker/" + encodeURIComponent(symbol) + "/news?limit=3")
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+      .then(function (data) {
+        if (mine !== panelSeq) return;
+        if (!data.items.length) { list.replaceChildren(panelMessage("No recent headlines for " + symbol + ".")); return; }
+        list.replaceChildren.apply(list, data.items.map(function (item) {
+          var li = document.createElement("li");
+          li.className = "panel-item";
+          li.setAttribute("data-testid", "panel-news-item");
+          var meta = document.createElement("div"); meta.className = "news-meta";
+          var src = document.createElement("span"); src.className = "news-source"; src.dataset.source = item.source; src.textContent = item.source;
+          meta.append(src);
+          if (item.published) {
+            var t = document.createElement("time"); t.dateTime = item.published; t.textContent = relTime(item.published);
+            t.title = new Date(item.published).toLocaleString();
+            meta.append(t);
+          }
+          var a = document.createElement("a");
+          a.className = "panel-title"; a.href = item.link; a.target = "_blank"; a.rel = "noopener noreferrer";
+          a.textContent = item.title;
+          li.append(meta, a);
+          if (item.summary) { var p = document.createElement("p"); p.className = "panel-summary"; p.textContent = item.summary; li.append(p); }
+          return li;
+        }));
+      })
+      .catch(function () { if (mine === panelSeq) list.replaceChildren(panelMessage("Couldn't load headlines. Please try again.")); });
+  }
+
+  if (panel) {
+    panel.querySelector("[data-testid=news-panel-close]").addEventListener("click", closePanel);
+    backdrop.addEventListener("click", closePanel);
+    document.addEventListener("keydown", function (ev) { if (ev.key === "Escape" && !panel.hidden) closePanel(); });
+  }
+
+  // A plain click on a ticker opens the panel; Cmd/Ctrl/middle-click still opens the full page.
+  chipsEl.addEventListener("click", function (ev) {
+    var link = ev.target.closest(".chip-link");
+    if (!link || ev.defaultPrevented || ev.button !== 0 || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return;
+    ev.preventDefault();
+    var card = link.closest("[data-symbol]");
+    var name = card.querySelector(".name");
+    openNews(card.dataset.symbol, name ? name.textContent : "");
+  });
+
+  // ---------- Market research: one analysis per company, risks first ----------
+  var researchEl = document.querySelector("[data-testid=research-list]");
+  var summaryEl = document.querySelector("[data-testid=risk-summary]");
+  var analyses = {};
+  var queue = [];
+  var running = 0;
+  var MAX_PARALLEL = 3;
+  var SEV_LABEL = { high: "High", medium: "Medium", low: "Low" };
+  var SEV_RANK = { high: 0, medium: 1, low: 2 };
+
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+
+  function money(v) {
+    if (v == null) return "n/a";
+    var a = Math.abs(v), sign = v < 0 ? "-" : "";
+    var units = [[1e12, "T"], [1e9, "B"], [1e6, "M"], [1e3, "K"]];
+    for (var i = 0; i < units.length; i++) if (a >= units[i][0]) return sign + "$" + (a / units[i][0]).toFixed(2) + units[i][1];
+    return sign + "$" + a.toFixed(0);
+  }
+
+  function value(m, v) {
+    if (v == null) return "n/a";
+    if (m.unit === "pct") return v.toFixed(1) + "%";
+    if (m.unit === "eps") return (v < 0 ? "-$" : "$") + Math.abs(v).toFixed(2);
+    return money(v);
+  }
+
+  function changeCell(m) {
+    var td = el("td", "rc-change");
+    if (m.change == null) { td.textContent = "n/a"; return td; }
+    td.textContent = (m.change > 0 ? "+" : "") + m.change.toFixed(1) + (m.change_unit === "pp" ? " pp" : "%");
+    td.classList.add(m.change > 0 ? "up" : m.change < 0 ? "down" : "flat");
+    return td;
+  }
+
+  function riskItem(r) {
+    var li = el("li", "risk sev-" + r.severity);
+    li.setAttribute("data-testid", "risk");
+    li.dataset.severity = r.severity;
+    li.append(el("span", "sev", SEV_LABEL[r.severity] || r.severity), el("strong", "risk-title", r.title), el("p", "risk-detail", r.detail));
+    return li;
+  }
+
+  function cardShell(symbol) {
+    var card = el("article", "research-card");
+    card.dataset.symbol = symbol;
+    card.setAttribute("data-testid", "research-card");
+    var head = el("header", "rc-head");
+    var sym = el("button", "rc-sym", symbol);
+    sym.type = "button";
+    sym.title = "Show top news for " + symbol;
+    sym.setAttribute("data-testid", "research-symbol");
+    sym.addEventListener("click", function () { openNews(symbol, (analyses[symbol] || {}).name || ""); });
+    head.append(sym, el("span", "rc-name"), el("span", "rc-badge"));
+    var body = el("div", "rc-body");
+    body.append(el("p", "rc-loading", "Analyzing the latest filings…"));
+    card.append(head, body);
+    return card;
+  }
+
+  function fillCard(card, a) {
+    var head = card.querySelector(".rc-head");
+    head.querySelector(".rc-name").textContent = a.name;
+    var badge = head.querySelector(".rc-badge");
+    badge.textContent = a.analyst === "claude" ? "AI analysis" : "Rule-based";
+    badge.title = a.analyst === "claude" ? "Written by Claude from the filed figures and recent headlines" : "Computed from the filed figures. Set ANTHROPIC_API_KEY for AI drivers and guidance.";
+    badge.dataset.analyst = a.analyst;
+    var body = card.querySelector(".rc-body");
+    body.replaceChildren();
+
+    // 1. Risks first.
+    var risks = el("section", "rc-risks");
+    risks.setAttribute("data-testid", "research-risks");
+    risks.append(el("h4", null, "Risks and red flags"));
+    if (a.risks.length) {
+      var ul = el("ul", "risk-list");
+      a.risks.forEach(function (r) { ul.append(riskItem(r)); });
+      risks.append(ul);
+    } else {
+      risks.append(el("p", "rc-muted", "No red flags found in the figures checked."));
+    }
+    body.append(risks);
+
+    // 2. Headline.
+    var hl = el("p", "rc-headline", a.headline);
+    hl.setAttribute("data-testid", "research-headline");
+    body.append(hl);
+
+    // 3. Key metrics table.
+    if (a.metrics.length) {
+      var wrap = el("div", "rc-table-wrap");
+      var table = el("table", "rc-metrics");
+      table.setAttribute("data-testid", "research-metrics");
+      var thead = el("thead"); var tr = el("tr");
+      ["Metric", "This period", "Prior year", "Change"].forEach(function (h) { var th = el("th", null, h); th.scope = "col"; tr.append(th); });
+      thead.append(tr); table.append(thead);
+      var tbody = el("tbody");
+      a.metrics.forEach(function (m) {
+        var row = el("tr");
+        row.setAttribute("data-testid", "metric-row");
+        var th = el("th"); th.scope = "row";
+        th.append(el("span", "rc-metric", m.name), el("span", "rc-period", m.period + " · " + m.basis));
+        row.append(th, el("td", null, value(m, m.current)), el("td", null, value(m, m.prior)), changeCell(m));
+        tbody.append(row);
+      });
+      table.append(tbody); wrap.append(table); body.append(wrap);
+    }
+
+    // 4. Drivers and 5. guidance.
+    var cols = el("div", "rc-cols");
+    var drivers = el("section", "rc-drivers");
+    drivers.setAttribute("data-testid", "research-drivers");
+    drivers.append(el("h4", null, a.analyst === "claude" ? "What drove the results" : "What changed"));
+    var dl = el("ul");
+    (a.drivers.length ? a.drivers : ["No year-over-year comparison is available."]).forEach(function (d) { dl.append(el("li", null, d)); });
+    drivers.append(dl);
+    var guidance = el("section", "rc-guidance");
+    guidance.setAttribute("data-testid", "research-guidance");
+    guidance.append(el("h4", null, "Guidance and outlook"), el("p", null, a.guidance));
+    cols.append(drivers, guidance);
+    body.append(cols);
+
+    // 6. Sources.
+    var foot = el("footer", "rc-sources");
+    foot.append(el("span", null, "Sources: "));
+    a.sources.forEach(function (s, i) {
+      var link = el("a", null, s.label);
+      link.href = s.url; link.target = "_blank"; link.rel = "noopener noreferrer";
+      if (i) foot.append(document.createTextNode(" · "));
+      foot.append(link);
+    });
+    foot.append(el("span", "rc-disclaimer", " " + a.disclaimer));
+    body.append(foot);
+  }
+
+  function failCard(card, message) {
+    card.classList.add("rc-failed");
+    var body = card.querySelector(".rc-body");
+    body.replaceChildren(el("p", "rc-muted", message));
+  }
+
+  function renderSummary() {
+    if (!summaryEl) return;
+    var all = [];
+    watchlist.forEach(function (s) {
+      var a = analyses[s];
+      if (!a) return;
+      a.risks.forEach(function (r) { if (r.severity !== "low") all.push({ symbol: s, risk: r }); });
+    });
+    all.sort(function (x, y) { return SEV_RANK[x.risk.severity] - SEV_RANK[y.risk.severity]; });
+    var list = summaryEl.querySelector("[data-testid=risk-summary-list]");
+    list.replaceChildren.apply(list, all.slice(0, 8).map(function (x) {
+      var li = riskItem(x.risk);
+      li.querySelector(".risk-detail").remove();
+      var tag = el("button", "risk-sym", x.symbol);
+      tag.type = "button";
+      tag.title = "Show top news for " + x.symbol;
+      tag.addEventListener("click", function () { openNews(x.symbol, analyses[x.symbol] ? analyses[x.symbol].name : ""); });
+      li.insertBefore(tag, li.querySelector(".risk-title"));
+      li.setAttribute("data-testid", "summary-risk");
+      return li;
+    }));
+    summaryEl.hidden = all.length === 0;
+  }
+
+  function pump() {
+    while (running < MAX_PARALLEL && queue.length) {
+      (function (symbol) {
+        running++;
+        fetch("/api/research/" + encodeURIComponent(symbol))
+          .then(function (r) {
+            return r.json().catch(function () { return {}; }).then(function (data) { return { ok: r.ok, data: data }; });
+          })
+          .then(function (res) {
+            var card = researchEl.querySelector('[data-symbol="' + symbol + '"]');
+            if (!card) return;
+            if (!res.ok) { failCard(card, res.data.detail || "Analysis isn't available right now."); return; }
+            analyses[symbol] = res.data;
+            fillCard(card, res.data);
+            renderSummary();
+          })
+          .catch(function () {
+            var card = researchEl.querySelector('[data-symbol="' + symbol + '"]');
+            if (card) failCard(card, "Analysis isn't available right now. Please try again later.");
+          })
+          .then(function () { running--; pump(); });
+      })(queue.shift());
+    }
+  }
+
+  function addResearch(symbol) {
+    if (!researchEl || researchEl.querySelector('[data-symbol="' + symbol + '"]')) return;
+    researchEl.append(cardShell(symbol));
+    queue.push(symbol);
+    pump();
+  }
+
+  function removeResearch(symbol) {
+    if (!researchEl) return;
+    var card = researchEl.querySelector('[data-symbol="' + symbol + '"]');
+    if (card) card.remove();
+    delete analyses[symbol];
+    queue = queue.filter(function (s) { return s !== symbol; });
+    renderSummary();
+  }
+
+  onAdd = addResearch;
+  onRemove = removeResearch;
+
   render();
   fetchQuotes(watchlist);
+  watchlist.forEach(addResearch);
   setInterval(function () { fetchQuotes(watchlist); }, REFRESH_MS);
 })();
 

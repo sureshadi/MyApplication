@@ -6,6 +6,8 @@ A small web app that:
 - has a left sidebar to pick one news source (WSJ, NYT, CNBC, FT) or all of them; on phones it becomes a row of pills
 - has a top ticker bar with live prices for AAPL, META, NVDA, AMAT, AVGO, LLY, GOOGL and MSFT. Visitors can add tickers with **+** and remove them with **×**; their list is saved in their browser
 - given a ticker symbol (for example `AAPL`), shows the current quote, the change on the day, a one-month price chart and related headlines
+- has a **My Portfolio** tab with live prices for every ticker. Clicking a ticker opens a side panel with that company's top 3 headlines
+- runs a **market research agent** for every company in My Portfolio, following the financial-report-analysis method: it reads the latest 10-K/10-Q figures from SEC EDGAR, compares them with the same period a year earlier, and shows **risks and red flags first**, then the headline, a key metrics table (revenue, margins, net income, EPS, cash flow, free cash flow, cash, debt, buybacks, dividends), what drove the results, guidance and sources. With `ANTHROPIC_API_KEY` set, Claude writes the drivers, guidance and extra risks from the figures and recent headlines; without it the analysis is rule-based. It is factual analysis only, not financial advice
 - has a light/dark mode toggle in the header on every page. It follows the system setting until the visitor picks one, then remembers that choice in their browser
 
 Built with FastAPI, Jinja templates, httpx and feedparser.
@@ -39,6 +41,10 @@ Open http://127.0.0.1:8000.
 | `WATCHLIST` | `AAPL,META,NVDA,AMAT,AVGO,LLY,GOOGL,MSFT` | Default tickers in the top bar. |
 | `MAX_ITEMS_PER_SOURCE` | `12` | Most headlines any one outlet can take on the front page, so busy feeds don't crowd out the rest. |
 | `HTTP_TIMEOUT_SECONDS` | `10` | Timeout for each outside request. |
+| `SEC_USER_AGENT` | generic | SEC EDGAR asks automated clients to identify themselves, e.g. `Your Name you@example.com`. Set this in production. |
+| `ANTHROPIC_API_KEY` | unset | Optional. Turns on Claude-written drivers, guidance and risks in the market research (model `claude-opus-5-5`). |
+| `RESEARCH_MODEL` | `claude-opus-5-5` | Claude model for the market research. |
+| `RESEARCH_TTL_SECONDS` | `21600` | How long each company's analysis is cached (6 hours). |
 
 News feeds are listed in `app/config.py`.
 
@@ -53,6 +59,8 @@ News feeds are listed in `app/config.py`.
 | `/api/sources` | Sidebar sources with headline counts |
 | `/api/quotes?symbols=AAPL,MSFT` | Quotes for the ticker bar (defaults to `WATCHLIST`). Unknown symbols come back with `"error": "not_found"` |
 | `/api/ticker/{symbol}` | Quote and news as JSON (400 invalid, 404 unknown, 503 provider down) |
+| `/api/ticker/{symbol}/news?limit=3` | Top headlines for one company (the My Portfolio side panel) |
+| `/api/research/{symbol}` | Market research: risks, key metrics, drivers, guidance, sources (404 when the company has no SEC filings, 503 when EDGAR is down) |
 | `/healthz` | Health check |
 
 ## Tests
@@ -68,9 +76,9 @@ pytest -m e2e          # browser tests against a live local server
 
 | Folder | What it covers |
 | --- | --- |
-| `tests/unit` | Feed parsing, HTML cleaning, merging and de-duplication, quote parsing, symbol validation, cache |
+| `tests/unit` | Feed parsing, HTML cleaning, merging and de-duplication, quote parsing, symbol validation, cache, research figures, year-over-year changes, red flags and the Claude fallback |
 | `tests/api` | Every route: JSON shape, caching, error codes, empty states, HTML escaping |
-| `tests/e2e` | Playwright: front page, ticker search, ticker bar (prices, add, remove, saved after reload, errors), not-found and invalid input, mobile layout, dark mode (system default, toggle, saved after reload) |
+| `tests/e2e` | Playwright: front page, ticker search, ticker bar (prices, add, remove, saved after reload, errors), not-found and invalid input, mobile layout, dark mode (system default, toggle, saved after reload), ticker news side panel, market research cards (risks first, metrics table, risk summary, add/remove, phone layout) |
 
 ## CI
 
