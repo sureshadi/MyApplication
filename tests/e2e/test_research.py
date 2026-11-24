@@ -1,5 +1,5 @@
-"""My Portfolio: clicking a ticker opens a side panel with its top 3 news, and every company gets a
-market research card with the risks at the top."""
+"""My Portfolio: clicking a ticker opens a side panel with its top 3 news, and market research shows
+one tab per company (with a risk dot) and one company's analysis at a time, risks first."""
 
 import json
 import re
@@ -20,8 +20,12 @@ def chip(page: Page, symbol: str):
     return page.locator(f'[data-testid="ticker-chip"][data-symbol="{symbol}"]')
 
 
-def card(page: Page, symbol: str):
-    return page.locator(f'[data-testid="research-card"][data-symbol="{symbol}"]')
+def tab(page: Page, symbol: str):
+    return page.locator(f'[data-testid="research-tab"][data-symbol="{symbol}"]')
+
+
+def research(page: Page):
+    return page.get_by_test_id("research-panel")
 
 
 def panel(page: Page):
@@ -80,74 +84,113 @@ def test_panel_switches_between_tickers_and_handles_no_news(page: Page, live_ser
     expect(page.get_by_test_id("panel-news")).to_have_text("No recent headlines for NVDA.")
 
 
-def test_research_card_for_every_ticker_with_risks_at_the_top(page: Page, live_server):
+def test_one_tab_per_ticker_and_first_company_shown(page: Page, live_server):
     open_portfolio(page, live_server)
     expect(page.get_by_role("heading", name="Market research")).to_be_visible()
-    expect(page.get_by_test_id("research-card")).to_have_count(8)
-    aapl = card(page, "AAPL")
-    expect(aapl.get_by_test_id("research-metrics")).to_be_visible()
-    # Risks come first in the card body, before the headline and the metrics table.
-    first_section = aapl.locator(".rc-body > *").first
-    expect(first_section).to_have_attribute("data-testid", "research-risks")
-    expect(aapl.get_by_test_id("risk").first).to_contain_text("Receivables growing faster than revenue")
-    expect(aapl.get_by_test_id("research-headline")).to_contain_text("revenue grew 8.5% year over year")
+    tabs = page.get_by_role("tab")
+    expect(tabs).to_have_count(8)
+    expect(tabs.locator(".tab-sym")).to_have_text(["AAPL", "META", "NVDA", "AMAT", "AVGO", "LLY", "GOOGL", "MSFT"])
+    expect(tab(page, "AAPL")).to_have_attribute("aria-selected", "true")
+    expect(research(page)).to_have_attribute("data-symbol", "AAPL")
+    expect(research(page).locator(".rp-name")).to_have_text("Apple Inc.")
+    # Only one company's analysis is on the page at a time.
+    expect(page.get_by_test_id("research-headline")).to_have_count(1)
 
 
-def test_research_card_shows_key_metrics_table(page: Page, live_server):
+def test_tab_dots_show_each_companys_risk_level(page: Page, live_server):
+    open_portfolio(page, live_server, ["AAPL", "LOSS", "ZZZZ"])
+    expect(tab(page, "LOSS")).to_have_attribute("data-level", "hi")
+    expect(tab(page, "AAPL")).to_have_attribute("data-level", "md")
+    expect(tab(page, "ZZZZ")).to_have_attribute("data-level", "na")
+    expect(tab(page, "LOSS").locator(".tab-dot")).to_have_class(re.compile(r"\bdot-hi\b"))
+
+
+def test_risks_come_first_then_key_numbers(page: Page, live_server):
     open_portfolio(page, live_server)
-    table = card(page, "AAPL").get_by_test_id("research-metrics")
+    panel_el = research(page)
+    expect(panel_el.get_by_test_id("risk-level")).to_have_text("Watch")
+    expect(panel_el.get_by_test_id("research-headline")).to_contain_text("revenue grew 8.5% year over year")
+    order = panel_el.evaluate(
+        "el => [...el.children].map(c => c.dataset.testid || c.className)"
+    )
+    assert order.index("research-risks") < order.index("research-kpis") < order.index("research-more")
+    expect(panel_el.get_by_test_id("risk").first).to_contain_text("Receivables growing faster than revenue")
+    kpis = panel_el.get_by_test_id("kpi")
+    expect(kpis.locator(".kpi-name")).to_have_text(["Revenue", "Operating margin", "Net income", "Free cash flow"])
+    expect(kpis.first.locator(".kpi-value")).to_have_text("$102.00B")
+    expect(kpis.first.locator(".kpi-change")).to_have_text("+8.5%")
+    expect(kpis.nth(1).locator(".kpi-change")).to_have_text("+1.0 pp")
+
+
+def test_clicking_a_tab_switches_company(page: Page, live_server):
+    open_portfolio(page, live_server, ["AAPL", "LOSS"])
+    tab(page, "LOSS").click()
+    expect(tab(page, "LOSS")).to_have_attribute("aria-selected", "true")
+    expect(tab(page, "AAPL")).to_have_attribute("aria-selected", "false")
+    expect(research(page).get_by_test_id("risk-level")).to_have_text("High risk")
+    expect(research(page).get_by_test_id("risk").first).to_have_attribute("data-severity", "high")
+
+
+def test_arrow_keys_move_between_tabs(page: Page, live_server):
+    open_portfolio(page, live_server, ["AAPL", "LOSS", "MSFT"])
+    tab(page, "AAPL").focus()
+    page.keyboard.press("ArrowRight")
+    expect(tab(page, "LOSS")).to_be_focused()
+    expect(research(page)).to_have_attribute("data-symbol", "LOSS")
+    page.keyboard.press("ArrowLeft")
+    page.keyboard.press("ArrowLeft")  # wraps around to the last tab
+    expect(research(page)).to_have_attribute("data-symbol", "MSFT")
+
+
+def test_show_reveals_all_fundamentals_drivers_guidance_and_sources(page: Page, live_server):
+    open_portfolio(page, live_server)
+    more = research(page).get_by_test_id("research-more")
+    table = more.get_by_test_id("research-metrics")
+    expect(table).to_be_hidden()
+    more.locator("summary").click()
+    expect(table).to_be_visible()
     expect(table.locator("thead th")).to_have_text(["Metric", "This period", "Prior year", "Change"])
     revenue = table.get_by_test_id("metric-row").first
-    expect(revenue).to_contain_text("Revenue")
     expect(revenue).to_contain_text("Quarter ended Sep 27, 2026 · GAAP")
     expect(revenue.locator("td")).to_have_text(["$102.00B", "$94.00B", "+8.5%"])
-    expect(table).to_contain_text("Gross margin")
-    expect(table.get_by_test_id("metric-row").filter(has_text="Gross margin").locator("td").last).to_have_text("+1.0 pp")
-    expect(card(page, "AAPL").get_by_test_id("research-guidance")).to_be_visible()
-    expect(card(page, "AAPL").locator(".rc-sources a").first).to_have_attribute("href", re.compile(r"sec\.gov/Archives"))
+    expect(more.get_by_test_id("research-drivers")).to_be_visible()
+    expect(more.get_by_test_id("research-guidance")).to_be_visible()
+    expect(more.locator(".rc-sources a").first).to_have_attribute("href", re.compile(r"sec\.gov/Archives"))
 
 
-def test_portfolio_risk_summary_lists_high_risks_first(page: Page, live_server):
-    open_portfolio(page, live_server, ["AAPL", "LOSS"])
-    summary = page.get_by_test_id("risk-summary")
-    expect(summary).to_be_visible()
-    first = summary.get_by_test_id("summary-risk").first
-    expect(first).to_have_attribute("data-severity", "high")
-    expect(first).to_contain_text("LOSS")
-    # Clicking a ticker in the summary opens its news.
-    first.get_by_role("button", name="LOSS").click()
-    expect(page.get_by_test_id("news-panel-symbol")).to_have_text("LOSS")
-
-
-def test_clicking_research_symbol_opens_news_panel(page: Page, live_server):
+def test_top_news_button_opens_news_panel(page: Page, live_server):
     open_portfolio(page, live_server)
-    card(page, "MSFT").get_by_test_id("research-symbol").click()
+    tab(page, "MSFT").click()
+    research(page).get_by_test_id("research-news").click()
     expect(page.get_by_test_id("news-panel-symbol")).to_have_text("MSFT")
     expect(page.get_by_test_id("panel-news-item")).to_have_count(3)
 
 
 def test_company_without_sec_filings_shows_a_message(page: Page, live_server):
-    open_portfolio(page, live_server, ["AAPL", "ZZZZ"])
-    expect(card(page, "ZZZZ")).to_contain_text("No SEC filings found for ZZZZ")
+    open_portfolio(page, live_server, ["ZZZZ", "AAPL"])
+    expect(research(page)).to_contain_text("No SEC filings found for ZZZZ")
 
 
-def test_adding_and_removing_tickers_updates_research(page: Page, live_server):
+def test_adding_and_removing_tickers_updates_tabs(page: Page, live_server):
     open_portfolio(page, live_server, ["AAPL"])
-    expect(page.get_by_test_id("research-card")).to_have_count(1)
+    expect(page.get_by_role("tab")).to_have_count(1)
     page.get_by_role("button", name="Add ticker").click()
     page.get_by_label("New ticker symbol").fill("TSLA")
     page.get_by_role("button", name="Add", exact=True).click()
-    expect(card(page, "TSLA").get_by_test_id("research-metrics")).to_be_visible()
-    chip(page, "AAPL").hover()
-    page.get_by_role("button", name="Remove AAPL").click()
-    expect(card(page, "AAPL")).to_have_count(0)
-    expect(page.get_by_test_id("research-card")).to_have_count(1)
+    expect(tab(page, "TSLA")).to_be_visible()
+    tab(page, "TSLA").click()
+    expect(research(page).get_by_test_id("research-kpis")).to_be_visible()
+    chip(page, "TSLA").hover()
+    page.get_by_role("button", name="Remove TSLA").click()
+    expect(tab(page, "TSLA")).to_have_count(0)
+    # The removed company was selected, so the first remaining one is shown.
+    expect(research(page)).to_have_attribute("data-symbol", "AAPL")
 
 
 def test_research_and_panel_fit_on_a_phone(page: Page, live_server):
     page.set_viewport_size({"width": 375, "height": 800})
     open_portfolio(page, live_server)
-    expect(card(page, "AAPL").get_by_test_id("research-metrics")).to_be_visible()
+    expect(research(page).get_by_test_id("research-kpis")).to_be_visible()
     assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
     chip(page, "MSFT").get_by_role("link").click()
     box = panel_box(page)

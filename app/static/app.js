@@ -388,15 +388,18 @@ function attachSuggestions(input, list, onPick) {
     openNews(card.dataset.symbol, name ? name.textContent : "");
   });
 
-  // ---------- Market research: one analysis per company, risks first ----------
-  var researchEl = document.querySelector("[data-testid=research-list]");
-  var summaryEl = document.querySelector("[data-testid=risk-summary]");
-  var analyses = {};
+  // ---------- Market research: one tab per company, one analysis shown at a time ----------
+  var tabsEl = document.querySelector("[data-testid=research-tabs]");
+  var panelEl = document.querySelector("[data-testid=research-panel]");
+  var analyses = {};   // symbol -> analysis JSON
+  var failures = {};   // symbol -> message
+  var selected = null;
   var queue = [];
   var running = 0;
   var MAX_PARALLEL = 3;
+  var LEVEL_LABEL = { hi: "High risk", md: "Watch", lo: "Low risk", ok: "No flags" };
   var SEV_LABEL = { high: "High", medium: "Medium", low: "Low" };
-  var SEV_RANK = { high: 0, medium: 1, low: 2 };
+  var KEY_METRICS = ["Revenue", "Operating margin", "Net income", "Free cash flow"];
 
   function el(tag, cls, text) {
     var e = document.createElement(tag);
@@ -420,102 +423,151 @@ function attachSuggestions(input, list, onPick) {
     return money(v);
   }
 
-  function changeCell(m) {
-    var td = el("td", "rc-change");
-    if (m.change == null) { td.textContent = "n/a"; return td; }
-    td.textContent = (m.change > 0 ? "+" : "") + m.change.toFixed(1) + (m.change_unit === "pp" ? " pp" : "%");
-    td.classList.add(m.change > 0 ? "up" : m.change < 0 ? "down" : "flat");
-    return td;
+  function changeText(m) {
+    if (m.change == null) return m.prior == null ? "No prior year" : "n/m";
+    return (m.change > 0 ? "+" : "") + m.change.toFixed(1) + (m.change_unit === "pp" ? " pp" : "%");
   }
 
-  function riskItem(r) {
-    var li = el("li", "risk sev-" + r.severity);
-    li.setAttribute("data-testid", "risk");
-    li.dataset.severity = r.severity;
-    li.append(el("span", "sev", SEV_LABEL[r.severity] || r.severity), el("strong", "risk-title", r.title), el("p", "risk-detail", r.detail));
-    return li;
+  function changeClass(m) { return m.change == null ? "flat" : m.change > 0 ? "up" : m.change < 0 ? "down" : "flat"; }
+
+  function riskLevel(a) {
+    var sev = a.risks.map(function (r) { return r.severity; });
+    return sev.indexOf("high") >= 0 ? "hi" : sev.indexOf("medium") >= 0 ? "md" : sev.length ? "lo" : "ok";
   }
 
-  function cardShell(symbol) {
-    var card = el("article", "research-card");
-    card.dataset.symbol = symbol;
-    card.setAttribute("data-testid", "research-card");
-    var head = el("header", "rc-head");
-    var sym = el("button", "rc-sym", symbol);
-    sym.type = "button";
-    sym.title = "Show top news for " + symbol;
-    sym.setAttribute("data-testid", "research-symbol");
-    sym.addEventListener("click", function () { openNews(symbol, (analyses[symbol] || {}).name || ""); });
-    head.append(sym, el("span", "rc-name"), el("span", "rc-badge"));
-    var body = el("div", "rc-body");
-    body.append(el("p", "rc-loading", "Analyzing the latest filings…"));
-    card.append(head, body);
-    return card;
+  function levelBadge(level) {
+    var b = el("span", "level-badge lv-" + level, LEVEL_LABEL[level]);
+    b.setAttribute("data-testid", "risk-level");
+    b.dataset.level = level;
+    return b;
   }
 
-  function fillCard(card, a) {
-    var head = card.querySelector(".rc-head");
-    head.querySelector(".rc-name").textContent = a.name;
-    var badge = head.querySelector(".rc-badge");
-    badge.textContent = a.analyst === "claude" ? "AI analysis" : "Rule-based";
-    badge.title = a.analyst === "claude" ? "Written by Claude from the filed figures and recent headlines" : "Computed from the filed figures. Set ANTHROPIC_API_KEY for AI drivers and guidance.";
-    badge.dataset.analyst = a.analyst;
-    var body = card.querySelector(".rc-body");
-    body.replaceChildren();
+  // Tabs ----------------------------------------------------------------
+  function tabFor(symbol) { return tabsEl.querySelector('[data-symbol="' + symbol + '"]'); }
 
-    // 1. Risks first.
-    var risks = el("section", "rc-risks");
-    risks.setAttribute("data-testid", "research-risks");
-    risks.append(el("h4", null, "Risks and red flags"));
-    if (a.risks.length) {
-      var ul = el("ul", "risk-list");
-      a.risks.forEach(function (r) { ul.append(riskItem(r)); });
-      risks.append(ul);
-    } else {
-      risks.append(el("p", "rc-muted", "No red flags found in the figures checked."));
-    }
-    body.append(risks);
+  function paintTab(symbol) {
+    var tab = tabFor(symbol);
+    if (!tab) return;
+    var dot = tab.querySelector(".tab-dot");
+    var a = analyses[symbol];
+    var level = a ? riskLevel(a) : failures[symbol] ? "na" : "loading";
+    dot.className = "tab-dot dot-" + level;
+    tab.dataset.level = level;
+    tab.title = symbol + ": " + (a ? LEVEL_LABEL[level] : failures[symbol] ? "no analysis" : "analyzing…");
+  }
 
-    // 2. Headline.
-    var hl = el("p", "rc-headline", a.headline);
-    hl.setAttribute("data-testid", "research-headline");
-    body.append(hl);
+  function makeTab(symbol) {
+    var tab = el("button", "research-tab");
+    tab.type = "button";
+    tab.id = "rtab-" + symbol.replace(/[^A-Z0-9]/g, "_");
+    tab.dataset.symbol = symbol;
+    tab.setAttribute("role", "tab");
+    tab.setAttribute("aria-selected", "false");
+    tab.setAttribute("tabindex", "-1");
+    tab.setAttribute("data-testid", "research-tab");
+    tab.append(el("span", "tab-dot dot-loading"), el("span", "tab-sym", symbol));
+    tab.addEventListener("click", function () { select(symbol); });
+    return tab;
+  }
 
-    // 3. Key metrics table.
-    if (a.metrics.length) {
-      var wrap = el("div", "rc-table-wrap");
-      var table = el("table", "rc-metrics");
-      table.setAttribute("data-testid", "research-metrics");
-      var thead = el("thead"); var tr = el("tr");
-      ["Metric", "This period", "Prior year", "Change"].forEach(function (h) { var th = el("th", null, h); th.scope = "col"; tr.append(th); });
-      thead.append(tr); table.append(thead);
-      var tbody = el("tbody");
-      a.metrics.forEach(function (m) {
-        var row = el("tr");
-        row.setAttribute("data-testid", "metric-row");
-        var th = el("th"); th.scope = "row";
-        th.append(el("span", "rc-metric", m.name), el("span", "rc-period", m.period + " · " + m.basis));
-        row.append(th, el("td", null, value(m, m.current)), el("td", null, value(m, m.prior)), changeCell(m));
-        tbody.append(row);
-      });
-      table.append(tbody); wrap.append(table); body.append(wrap);
-    }
+  function select(symbol, focus) {
+    selected = symbol;
+    tabsEl.querySelectorAll("[role=tab]").forEach(function (t) {
+      var on = t.dataset.symbol === symbol;
+      t.setAttribute("aria-selected", on ? "true" : "false");
+      t.setAttribute("tabindex", on ? "0" : "-1");
+      if (on && focus) t.focus();
+      if (on) t.scrollIntoView({ block: "nearest", inline: "nearest" });
+    });
+    var tab = tabFor(symbol);
+    if (tab) panelEl.setAttribute("aria-labelledby", tab.id);
+    renderPanel();
+  }
 
-    // 4. Drivers and 5. guidance.
+  tabsEl.addEventListener("keydown", function (ev) {
+    var tabs = Array.prototype.slice.call(tabsEl.querySelectorAll("[role=tab]"));
+    var i = tabs.findIndex(function (t) { return t.dataset.symbol === selected; });
+    var next = ev.key === "ArrowRight" ? i + 1 : ev.key === "ArrowLeft" ? i - 1 : ev.key === "Home" ? 0 : ev.key === "End" ? tabs.length - 1 : null;
+    if (next === null || !tabs.length) return;
+    ev.preventDefault();
+    select(tabs[(next + tabs.length) % tabs.length].dataset.symbol, true);
+  });
+
+  // Panel ---------------------------------------------------------------
+  function riskList(a) {
+    var box = el("section", "rc-risks");
+    box.setAttribute("data-testid", "research-risks");
+    box.append(el("h4", "rp-h", "Risks and red flags"));
+    if (!a.risks.length) { box.append(el("p", "rc-muted", "No red flags found in the figures checked.")); return box; }
+    var ul = el("ul", "risk-list");
+    a.risks.forEach(function (r) {
+      var li = el("li", "risk sev-" + r.severity);
+      li.setAttribute("data-testid", "risk");
+      li.dataset.severity = r.severity;
+      li.append(el("span", "sev", SEV_LABEL[r.severity] || r.severity), el("strong", "risk-title", r.title), el("p", "risk-detail", r.detail));
+      ul.append(li);
+    });
+    box.append(ul);
+    return box;
+  }
+
+  function kpiTiles(a) {
+    var byName = {};
+    a.metrics.forEach(function (m) { byName[m.name] = m; });
+    var grid = el("div", "kpi-grid");
+    grid.setAttribute("data-testid", "research-kpis");
+    KEY_METRICS.forEach(function (name) {
+      var m = byName[name];
+      if (!m) return;
+      var tile = el("div", "kpi");
+      tile.setAttribute("data-testid", "kpi");
+      tile.append(el("span", "kpi-name", name), el("b", "kpi-value", value(m, m.current)), el("span", "kpi-change " + changeClass(m), changeText(m)));
+      grid.append(tile);
+    });
+    return grid;
+  }
+
+  function metricsTable(a) {
+    var wrap = el("div", "rc-table-wrap");
+    var table = el("table", "rc-metrics");
+    table.setAttribute("data-testid", "research-metrics");
+    var thead = el("thead"), tr = el("tr");
+    ["Metric", "This period", "Prior year", "Change"].forEach(function (h) { var th = el("th", null, h); th.scope = "col"; tr.append(th); });
+    thead.append(tr); table.append(thead);
+    var tbody = el("tbody");
+    a.metrics.forEach(function (m) {
+      var row = el("tr");
+      row.setAttribute("data-testid", "metric-row");
+      var th = el("th"); th.scope = "row";
+      th.append(el("span", "rc-metric", m.name), el("span", "rc-period", m.period + " · " + m.basis));
+      var ch = el("td", "rc-change " + changeClass(m), m.change == null ? "n/a" : changeText(m));
+      row.append(th, el("td", null, value(m, m.current)), el("td", null, value(m, m.prior)), ch);
+      tbody.append(row);
+    });
+    table.append(tbody); wrap.append(table);
+    return wrap;
+  }
+
+  function moreSection(a) {
+    var details = el("details", "rp-more");
+    details.setAttribute("data-testid", "research-more");
+    var summary = el("summary", null);
+    summary.append(el("span", null, "All fundamentals · Drivers & guidance · Sources"), el("span", "rp-more-toggle"));
+    details.append(summary);
+    var body = el("div", "rp-more-body");
+    if (a.metrics.length) { body.append(el("h4", "rp-h", "All fundamentals"), metricsTable(a)); }
     var cols = el("div", "rc-cols");
     var drivers = el("section", "rc-drivers");
     drivers.setAttribute("data-testid", "research-drivers");
-    drivers.append(el("h4", null, a.analyst === "claude" ? "What drove the results" : "What changed"));
+    drivers.append(el("h4", "rp-h", a.analyst === "claude" ? "What drove the results" : "What changed"));
     var dl = el("ul");
     (a.drivers.length ? a.drivers : ["No year-over-year comparison is available."]).forEach(function (d) { dl.append(el("li", null, d)); });
     drivers.append(dl);
     var guidance = el("section", "rc-guidance");
     guidance.setAttribute("data-testid", "research-guidance");
-    guidance.append(el("h4", null, "Guidance and outlook"), el("p", null, a.guidance));
+    guidance.append(el("h4", "rp-h", "Guidance and outlook"), el("p", null, a.guidance));
     cols.append(drivers, guidance);
     body.append(cols);
-
-    // 6. Sources.
     var foot = el("footer", "rc-sources");
     foot.append(el("span", null, "Sources: "));
     a.sources.forEach(function (s, i) {
@@ -524,40 +576,55 @@ function attachSuggestions(input, list, onPick) {
       if (i) foot.append(document.createTextNode(" · "));
       foot.append(link);
     });
-    foot.append(el("span", "rc-disclaimer", " " + a.disclaimer));
+    var who = a.analyst === "claude" ? "Drivers, guidance and some risks written by Claude from the filed figures and recent headlines." : "Computed from the filed figures.";
+    foot.append(el("span", "rc-disclaimer", " " + who + " " + a.disclaimer));
     body.append(foot);
+    details.append(body);
+    return details;
   }
 
-  function failCard(card, message) {
-    card.classList.add("rc-failed");
-    var body = card.querySelector(".rc-body");
-    body.replaceChildren(el("p", "rc-muted", message));
+  function panelHead(symbol, name, level) {
+    var head = el("div", "rp-head");
+    var title = el("h3", "rp-title");
+    title.append(el("span", "rp-sym", symbol));
+    if (name) title.append(el("span", "rp-name", name));
+    var side = el("div", "rp-side");
+    if (level) side.append(levelBadge(level));
+    var news = el("button", "rp-news", "Top news");
+    news.type = "button";
+    news.setAttribute("data-testid", "research-news");
+    news.addEventListener("click", function () { openNews(symbol, name || ""); });
+    side.append(news);
+    head.append(title, side);
+    return head;
   }
 
-  function renderSummary() {
-    if (!summaryEl) return;
-    var all = [];
-    watchlist.forEach(function (s) {
-      var a = analyses[s];
-      if (!a) return;
-      a.risks.forEach(function (r) { if (r.severity !== "low") all.push({ symbol: s, risk: r }); });
-    });
-    all.sort(function (x, y) { return SEV_RANK[x.risk.severity] - SEV_RANK[y.risk.severity]; });
-    var list = summaryEl.querySelector("[data-testid=risk-summary-list]");
-    list.replaceChildren.apply(list, all.slice(0, 8).map(function (x) {
-      var li = riskItem(x.risk);
-      li.querySelector(".risk-detail").remove();
-      var tag = el("button", "risk-sym", x.symbol);
-      tag.type = "button";
-      tag.title = "Show top news for " + x.symbol;
-      tag.addEventListener("click", function () { openNews(x.symbol, analyses[x.symbol] ? analyses[x.symbol].name : ""); });
-      li.insertBefore(tag, li.querySelector(".risk-title"));
-      li.setAttribute("data-testid", "summary-risk");
-      return li;
-    }));
-    summaryEl.hidden = all.length === 0;
+  function renderPanel() {
+    if (!panelEl) return;
+    if (!selected) { panelEl.hidden = true; panelEl.replaceChildren(); return; }
+    panelEl.hidden = false;
+    panelEl.dataset.symbol = selected;
+    var a = analyses[selected];
+    var openMore = !!panelEl.querySelector("details[open]") && panelEl.dataset.shown === selected;
+    panelEl.dataset.shown = selected;
+    if (!a) {
+      var msg = failures[selected];
+      panelEl.replaceChildren(panelHead(selected, "", null),
+        el("p", msg ? "rc-muted" : "rc-loading", msg || "Analyzing the latest filings…"));
+      return;
+    }
+    var headline = el("p", "rp-headline", a.headline);
+    headline.setAttribute("data-testid", "research-headline");
+    var meta = el("p", "rp-meta", (a.period ? a.period + " · " : "") + "GAAP · " + (a.analyst === "claude" ? "AI analysis" : "Rule-based analysis"));
+    var parts = [panelHead(selected, a.name, riskLevel(a)), headline, meta, riskList(a)];
+    if (a.metrics.length) parts.push(kpiTiles(a));
+    var more = moreSection(a);
+    if (openMore) more.open = true;
+    parts.push(more);
+    panelEl.replaceChildren.apply(panelEl, parts);
   }
 
+  // Loading -------------------------------------------------------------
   function pump() {
     while (running < MAX_PARALLEL && queue.length) {
       (function (symbol) {
@@ -567,36 +634,41 @@ function attachSuggestions(input, list, onPick) {
             return r.json().catch(function () { return {}; }).then(function (data) { return { ok: r.ok, data: data }; });
           })
           .then(function (res) {
-            var card = researchEl.querySelector('[data-symbol="' + symbol + '"]');
-            if (!card) return;
-            if (!res.ok) { failCard(card, res.data.detail || "Analysis isn't available right now."); return; }
-            analyses[symbol] = res.data;
-            fillCard(card, res.data);
-            renderSummary();
+            if (!tabFor(symbol)) return;
+            if (res.ok) analyses[symbol] = res.data;
+            else failures[symbol] = res.data.detail || "Analysis isn't available right now.";
           })
-          .catch(function () {
-            var card = researchEl.querySelector('[data-symbol="' + symbol + '"]');
-            if (card) failCard(card, "Analysis isn't available right now. Please try again later.");
-          })
-          .then(function () { running--; pump(); });
+          .catch(function () { failures[symbol] = "Analysis isn't available right now. Please try again later."; })
+          .then(function () {
+            running--;
+            paintTab(symbol);
+            if (symbol === selected) renderPanel();
+            pump();
+          });
       })(queue.shift());
     }
   }
 
   function addResearch(symbol) {
-    if (!researchEl || researchEl.querySelector('[data-symbol="' + symbol + '"]')) return;
-    researchEl.append(cardShell(symbol));
+    if (!tabsEl || tabFor(symbol)) return;
+    tabsEl.append(makeTab(symbol));
     queue.push(symbol);
+    if (!selected) select(symbol);
     pump();
   }
 
   function removeResearch(symbol) {
-    if (!researchEl) return;
-    var card = researchEl.querySelector('[data-symbol="' + symbol + '"]');
-    if (card) card.remove();
+    if (!tabsEl) return;
+    var tab = tabFor(symbol);
+    if (tab) tab.remove();
     delete analyses[symbol];
+    delete failures[symbol];
     queue = queue.filter(function (s) { return s !== symbol; });
-    renderSummary();
+    if (selected === symbol) {
+      var first = tabsEl.querySelector("[role=tab]");
+      selected = null;
+      if (first) select(first.dataset.symbol); else renderPanel();
+    }
   }
 
   onAdd = addResearch;

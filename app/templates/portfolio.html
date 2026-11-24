@@ -31,17 +31,12 @@
 
 <section class="research" data-testid="research" aria-labelledby="research-title">
   <div class="page-head research-head">
-    <div>
-      <h2 id="research-title">Market research</h2>
-      <p class="subtitle">Fundamentals from each company's latest SEC filings, with the risks first.
-        <span class="research-note">Factual analysis only, not financial advice.</span></p>
-    </div>
+    <h2 id="research-title">Market research</h2>
+    <p class="subtitle">Pick a company. The dot shows its risk level.
+      <span class="research-note">Factual analysis of SEC filings, not financial advice.</span></p>
   </div>
-  <div class="risk-summary" data-testid="risk-summary" hidden>
-    <h3>Top risks across your portfolio</h3>
-    <ul class="risk-summary-list" data-testid="risk-summary-list"></ul>
-  </div>
-  <div class="research-list" data-testid="research-list"></div>
+  <div class="research-tabs" role="tablist" aria-label="Companies" data-testid="research-tabs"></div>
+  <div class="research-panel" role="tabpanel" data-testid="research-panel" hidden></div>
 </section>
 
 <div class="panel-backdrop" data-testid="news-panel-backdrop" hidden></div>
