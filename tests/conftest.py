@@ -11,10 +11,12 @@ import pytest
 import respx
 from fastapi.testclient import TestClient
 
+from app import research
 from app.config import Feed, Settings, Topic
 from app.main import create_app
 from app.stocks import FINNHUB_BASE, YAHOO_CHART_URL
 from app.suggest import YAHOO_SEARCH_URL
+from tests import sec_fixtures
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -59,6 +61,9 @@ def install_default_routes(router: respx.MockRouter) -> None:
     router.get(TICKER_NEWS_URL.format(symbol="AAPL")).mock(
         return_value=httpx.Response(200, content=fixture_bytes("ticker_news_aapl.xml"))
     )
+    router.get(TICKER_NEWS_URL.format(symbol="MSFT")).mock(
+        return_value=httpx.Response(200, content=fixture_bytes("ticker_news_msft.xml"))
+    )
     router.get(TICKER_NEWS_URL.format(symbol="ZZZZ")).mock(return_value=httpx.Response(200, content=b"<rss/>"))
     router.get(YAHOO_CHART_URL.format(symbol="AAPL")).mock(
         return_value=httpx.Response(200, json=fixture_json("yahoo_chart_aapl.json"))
@@ -71,10 +76,44 @@ def install_default_routes(router: respx.MockRouter) -> None:
     router.get(url__regex=r"https://query1\.finance\.yahoo\.com/v8/finance/chart/[^/?]+").mock(side_effect=_generated_chart)
     router.get(url__regex=r"https://feeds\.test/ticker/[^/?]+\.xml").mock(return_value=httpx.Response(200, content=b"<rss/>"))
     router.get(YAHOO_SEARCH_URL).mock(side_effect=_yahoo_search)
+    install_sec_routes(router)
     router.get(f"{FINNHUB_BASE}/quote").mock(return_value=httpx.Response(200, json=fixture_json("finnhub_quote_msft.json")))
     router.get(f"{FINNHUB_BASE}/stock/profile2").mock(
         return_value=httpx.Response(200, json=fixture_json("finnhub_profile_msft.json"))
     )
+
+
+CIK_TO_NAME = {f"{r['cik_str']:010d}": r["title"] for r in sec_fixtures.SEC_TICKERS.values()}
+
+
+def _sec_facts(request: httpx.Request) -> httpx.Response:
+    cik = re.search(r"CIK(\d{10})", str(request.url)).group(1)
+    name = CIK_TO_NAME.get(cik)
+    if name is None:
+        return httpx.Response(404)
+    if name == "Loss Making Corp":
+        facts = sec_fixtures.company_facts(name, revenue=(8.0e9, 10.0e9), net_income=(-1.2e9, 0.4e9))
+    else:
+        facts = sec_fixtures.company_facts(name)
+    return httpx.Response(200, json=facts)
+
+
+def _sec_submissions(request: httpx.Request) -> httpx.Response:
+    cik = re.search(r"CIK(\d{10})", str(request.url)).group(1)
+    name = CIK_TO_NAME.get(cik)
+    return httpx.Response(200, json=sec_fixtures.submissions(name)) if name else httpx.Response(404)
+
+
+def install_sec_routes(router: respx.MockRouter) -> None:
+    router.get(research.SEC_TICKERS_URL).mock(return_value=httpx.Response(200, json=sec_fixtures.SEC_TICKERS))
+    router.get(url__regex=r"https://data\.sec\.gov/api/xbrl/companyfacts/CIK\d{10}\.json").mock(side_effect=_sec_facts)
+    router.get(url__regex=r"https://data\.sec\.gov/submissions/CIK\d{10}\.json").mock(side_effect=_sec_submissions)
+
+
+@pytest.fixture(autouse=True)
+def _no_claude_key(monkeypatch):
+    """Tests never call the real Claude API."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
 
 YAHOO_SEARCH_RESULTS = {
@@ -123,5 +162,5 @@ def mock_http():
 
 @pytest.fixture
 def client(mock_http):
-    with TestClient(create_app(make_settings())) as c:
+    with TestClient(create_app(make_settings(), analyst_factory=None)) as c:
         yield c

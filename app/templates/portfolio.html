@@ -5,7 +5,7 @@
   <div class="page-head portfolio-head">
     <div>
       <h1>My Portfolio</h1>
-      <p class="subtitle"><span data-testid="portfolio-count">{{ watchlist|length }}</span> tickers with the latest prices. Click one for its chart and news. Changes are saved in this browser.</p>
+      <p class="subtitle"><span data-testid="portfolio-count">{{ watchlist|length }}</span> tickers with the latest prices. Click a ticker for its top news. Changes are saved in this browser.</p>
     </div>
   </div>
   <div class="ticker-grid" id="watchlist" data-testid="watchlist">
@@ -28,4 +28,32 @@
     <span class="add-error" role="alert" data-testid="add-error"></span>
   </form>
 </section>
+
+<section class="research" data-testid="research" aria-labelledby="research-title">
+  <div class="page-head research-head">
+    <div>
+      <h2 id="research-title">Market research</h2>
+      <p class="subtitle">Fundamentals from each company's latest SEC filings, with the risks first.
+        <span class="research-note">Factual analysis only, not financial advice.</span></p>
+    </div>
+  </div>
+  <div class="risk-summary" data-testid="risk-summary" hidden>
+    <h3>Top risks across your portfolio</h3>
+    <ul class="risk-summary-list" data-testid="risk-summary-list"></ul>
+  </div>
+  <div class="research-list" data-testid="research-list"></div>
+</section>
+
+<div class="panel-backdrop" data-testid="news-panel-backdrop" hidden></div>
+<aside class="news-panel" role="dialog" aria-modal="false" aria-labelledby="news-panel-title" data-testid="news-panel" hidden>
+  <div class="news-panel-head">
+    <div>
+      <h2 id="news-panel-title"><span data-testid="news-panel-symbol"></span> <span class="panel-label">top news</span></h2>
+      <p class="news-panel-name" data-testid="news-panel-name"></p>
+    </div>
+    <button type="button" class="news-panel-close" aria-label="Close news panel" data-testid="news-panel-close">×</button>
+  </div>
+  <ol class="panel-news" data-testid="panel-news" aria-live="polite"></ol>
+  <a class="panel-more" data-testid="panel-more" href="#">Chart and all news →</a>
+</aside>
 {% endblock %}
