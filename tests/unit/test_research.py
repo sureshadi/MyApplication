@@ -110,6 +110,18 @@ class TestRedFlags:
         assert order == sorted(order)
         assert "Share price fell sharply" in self.titles(risks)
 
+    def test_inventory_flag_explains_inventory_not_collections(self):
+        facts = sec_fixtures.company_facts(receivables=(31.0e9, 30.0e9), ocf=(120.0e9, 110.0e9))
+        facts["facts"]["us-gaap"]["InventoryNet"] = sec_fixtures._instant(15.0e9, 6.0e9)
+        risks = research.red_flags(research.extract_fundamentals(facts))
+        assert self.titles(risks) == ["Inventory growing faster than revenue"]
+        assert "unsold stock" in risks[0].detail and "collect" not in risks[0].detail
+
+    def test_receivables_flag_explains_slower_payments(self):
+        risk = research.red_flags(fundamentals())[0]
+        assert risk.title == "Receivables growing faster than revenue"
+        assert "paying more slowly" in risk.detail
+
     def test_high_leverage(self):
         risks = research.red_flags(fundamentals(equity=(30.0e9, 28.0e9)))
         lev = next(r for r in risks if r.title == "High leverage")

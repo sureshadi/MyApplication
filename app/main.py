@@ -325,7 +325,13 @@ def create_app(settings: Settings | None = None, analyst_factory=research.defaul
             normalized = stocks.normalize_symbol(symbol)
         except stocks.InvalidSymbol as exc:
             raise HTTPException(status_code=400, detail=str(exc))
-        items = (await ticker_news(request, normalized))[:limit]
+        name = None
+        try:
+            name = (await cached_quote(request, normalized)).name
+        except (stocks.QuoteNotFound, stocks.QuoteUnavailable):
+            pass  # without a name, match on the ticker alone
+        # Yahoo's per-ticker feed mixes in stories about other companies: keep the ones about this one.
+        items = news.about_company(await ticker_news(request, normalized), normalized, name, limit)
         return {"symbol": normalized, "count": len(items), "items": [i.to_dict() for i in items]}
 
     async def sec_tickers(request: Request) -> dict | None:

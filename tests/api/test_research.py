@@ -95,3 +95,18 @@ def test_ticker_news_limit_and_validation(client):
 def test_ticker_news_does_not_need_a_quote(client, mock_http):
     client.get("/api/ticker/DOWN/news")  # the quote provider for DOWN is failing
     assert client.get("/api/ticker/DOWN/news").status_code == 200
+
+
+def test_ticker_news_prefers_headlines_about_the_company(client):
+    # The AMD feed has 2 stories about AMD (one only in its summary) among 3 about other companies.
+    titles = [i["title"] for i in client.get("/api/ticker/AMD/news").json()["items"]]
+    assert titles[:2] == ["AMD shares rise after new data center chip", "Chip stocks slip"]
+    # Fewer than 3 are about AMD, so the newest other headline tops the list up to 3.
+    assert titles[2] == "How risky is Snap stock now?"
+    assert [i["title"] for i in client.get("/api/ticker/AMD/news?limit=2").json()["items"]] == titles[:2]
+
+
+def test_ticker_news_matches_company_name_from_the_quote(client):
+    # AAPL's quote name is "Apple Inc."; both AAPL headlines say "Apple", not "AAPL".
+    titles = [i["title"] for i in client.get("/api/ticker/AAPL/news").json()["items"]]
+    assert titles == ["Apple unveils new AI features for iPhone", "Analysts raise Apple price target"]
