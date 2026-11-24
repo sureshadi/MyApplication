@@ -64,6 +64,9 @@ def install_default_routes(router: respx.MockRouter) -> None:
     router.get(TICKER_NEWS_URL.format(symbol="MSFT")).mock(
         return_value=httpx.Response(200, content=fixture_bytes("ticker_news_msft.xml"))
     )
+    router.get(TICKER_NEWS_URL.format(symbol="AMD")).mock(
+        return_value=httpx.Response(200, content=fixture_bytes("ticker_news_amd.xml"))
+    )
     router.get(TICKER_NEWS_URL.format(symbol="ZZZZ")).mock(return_value=httpx.Response(200, content=b"<rss/>"))
     router.get(YAHOO_CHART_URL.format(symbol="AAPL")).mock(
         return_value=httpx.Response(200, json=fixture_json("yahoo_chart_aapl.json"))

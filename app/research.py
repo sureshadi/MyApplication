@@ -369,13 +369,15 @@ def red_flags(f: Fundamentals, price_change_pct: float | None = None) -> list[Ri
             f"Net income fell {abs(ni.change_pct):.1f}% year over year to {money(ni.current.value)}.",
             "medium",
         ))
-    for key, label in (("receivables", "Receivables"), ("inventory", "Inventory")):
+    for key, label, meaning in (
+        ("receivables", "Receivables", "This can mean customers are paying more slowly."),
+        ("inventory", "Inventory", "This can mean unsold stock is building up or demand is weakening."),
+    ):
         fig = figs.get(key)
         if fig and fig.change_pct is not None and rev_g is not None and fig.change_pct - rev_g > 10:
             risks.append(Risk(
                 f"{label} growing faster than revenue",
-                f"{label} rose {fig.change_pct:.1f}% year over year while revenue changed {rev_g:+.1f}%. "
-                "This can mean slower collections or weaker demand ahead.",
+                f"{label} rose {fig.change_pct:.1f}% year over year while revenue changed {rev_g:+.1f}%. {meaning}",
                 "medium",
             ))
     ocf = figs.get("operating_cash_flow")

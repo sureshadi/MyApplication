@@ -135,3 +135,37 @@ async def fetch_all(
 ) -> list[NewsItem]:
     groups = await asyncio.gather(*(fetch_feed(client, f) for f in feeds))
     return merge_news(list(groups), limit=limit, max_per_source=max_per_source)
+
+
+# Words that don't identify a company on their own ("Apple Inc." -> "Apple").
+_COMPANY_SUFFIXES = {
+    "inc", "incorporated", "corp", "corporation", "co", "company", "ltd", "limited", "plc", "llc", "lp",
+    "holdings", "holding", "group", "sa", "nv", "ag", "se", "the", "class", "de",
+}
+
+
+def company_keywords(name: str | None) -> list[str]:
+    """Distinctive words of a company name: 'Meta Platforms, Inc.' -> ['meta', 'platforms']."""
+    words = re.findall(r"[a-z0-9&]+", (name or "").lower())
+    return [w for w in words if w not in _COMPANY_SUFFIXES and len(w) >= 3]
+
+
+def mentions_company(item: NewsItem, symbol: str, name: str | None = None) -> bool:
+    """True if the headline or summary names the ticker (e.g. 'AAPL') or the company's first name word."""
+    text = f"{item.title} {item.summary}"
+    if re.search(rf"(?<![A-Za-z0-9]){re.escape(symbol)}(?![A-Za-z0-9])", text):
+        return True
+    keywords = company_keywords(name)
+    if not keywords:
+        return False
+    return re.search(rf"\b{re.escape(keywords[0])}\b", text.lower()) is not None
+
+
+def about_company(items: list[NewsItem], symbol: str, name: str | None, limit: int) -> list[NewsItem]:
+    """Headlines that mention the company first. If there are fewer than `limit`, top up with the
+    other headlines from the feed, in their original order, so the reader still gets `limit` items."""
+    relevant = [i for i in items if mentions_company(i, symbol, name)]
+    if len(relevant) >= limit:
+        return relevant[:limit]
+    rest = [i for i in items if i not in relevant]
+    return relevant + rest[: limit - len(relevant)]

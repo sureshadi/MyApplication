@@ -4,6 +4,7 @@ import httpx
 import pytest
 import respx
 
+from app import news
 from app.config import Feed
 from app.news import NewsItem, clean_text, fetch_all, fetch_feed, merge_news, parse_feed
 from tests.conftest import BROKEN_URL, CNBC_URL, MW_URL, fixture_bytes
@@ -109,3 +110,39 @@ class TestFetch:
         assert titles[0] == "Stocks rally to record as tech leads gains"
         assert sum("fed holds rates" in t.lower() for t in titles) == 1
         assert {i.source for i in items} == {"CNBC", "MarketWatch"}
+
+
+class TestAboutCompany:
+    @staticmethod
+    def item(title, summary=""):
+        return news.NewsItem(title=title, link=f"https://x.test/{abs(hash(title))}", source="Yahoo Finance",
+                             published=None, summary=summary)
+
+    def test_company_keywords_drop_legal_suffixes(self):
+        assert news.company_keywords("Apple Inc.") == ["apple"]
+        assert news.company_keywords("Meta Platforms, Inc.") == ["meta", "platforms"]
+        assert news.company_keywords("ELI LILLY & Co") == ["eli", "lilly"]
+        assert news.company_keywords(None) == []
+
+    def test_matches_ticker_as_a_whole_word_only(self):
+        assert news.mentions_company(self.item("AAPL hits a record"), "AAPL")
+        assert news.mentions_company(self.item("Stocks (AAPL, MSFT) rally"), "MSFT")
+        assert not news.mentions_company(self.item("AAPLX fund launches"), "AAPL")
+
+    def test_matches_company_name_case_insensitively(self):
+        assert news.mentions_company(self.item("Why apple is down"), "AAPL", "Apple Inc.")
+        assert news.mentions_company(self.item("Markets", "Microsoft beat estimates"), "MSFT", "Microsoft Corp")
+        assert not news.mentions_company(self.item("Pineapple prices jump"), "AAPL", "Apple Inc.")
+
+    def test_relevant_first_then_topped_up_in_feed_order(self):
+        items = [self.item("Snap falls"), self.item("Apple rises"), self.item("HP slips"), self.item("Ford gains")]
+        picked = news.about_company(items, "AAPL", "Apple Inc.", 3)
+        assert [i.title for i in picked] == ["Apple rises", "Snap falls", "HP slips"]
+
+    def test_only_relevant_when_there_are_enough(self):
+        items = [self.item("Snap falls"), self.item("Apple rises"), self.item("AAPL record"), self.item("Apple deal")]
+        picked = news.about_company(items, "AAPL", "Apple Inc.", 3)
+        assert [i.title for i in picked] == ["Apple rises", "AAPL record", "Apple deal"]
+
+    def test_empty_feed(self):
+        assert news.about_company([], "AAPL", "Apple Inc.", 3) == []

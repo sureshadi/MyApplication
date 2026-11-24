@@ -7,7 +7,7 @@ A small web app that:
 - has a top ticker bar with live prices for AAPL, META, NVDA, AMAT, AVGO, LLY, GOOGL and MSFT. Visitors can add tickers with **+** and remove them with **×**; their list is saved in their browser
 - given a ticker symbol (for example `AAPL`), shows the current quote, the change on the day, a one-month price chart and related headlines
 - has a **My Portfolio** tab with live prices for every ticker. Clicking a ticker opens a side panel with that company's top 3 headlines
-- runs a **market research agent** for every company in My Portfolio, following the financial-report-analysis method: it reads the latest 10-K/10-Q figures from SEC EDGAR, compares them with the same period a year earlier, and shows **risks and red flags first**, then the headline, a key metrics table (revenue, margins, net income, EPS, cash flow, free cash flow, cash, debt, buybacks, dividends), what drove the results, guidance and sources. With `ANTHROPIC_API_KEY` set, Claude writes the drivers, guidance and extra risks from the figures and recent headlines; without it the analysis is rule-based. It is factual analysis only, not financial advice
+- runs a **market research agent** for every company in My Portfolio, following the financial-report-analysis method: it reads the latest 10-K/10-Q figures from SEC EDGAR, compares them with the same period a year earlier, and shows **risks and red flags first**, then the headline, a key metrics table (revenue, margins, net income, EPS, cash flow, free cash flow, cash, debt, buybacks, dividends), what drove the results, guidance and sources. With `ANTHROPIC_API_KEY` set, Claude writes the drivers, guidance and extra risks from the figures and recent headlines; without it the analysis is rule-based. Each company gets its own tab with a risk-level dot, so you read one analysis at a time: risks first, four key number tiles, and a "Show" section with all fundamentals, drivers, guidance and sources. It is factual analysis only, not financial advice
 - has a light/dark mode toggle in the header on every page. It follows the system setting until the visitor picks one, then remembers that choice in their browser
 
 Built with FastAPI, Jinja templates, httpx and feedparser.
@@ -78,7 +78,7 @@ pytest -m e2e          # browser tests against a live local server
 | --- | --- |
 | `tests/unit` | Feed parsing, HTML cleaning, merging and de-duplication, quote parsing, symbol validation, cache, research figures, year-over-year changes, red flags and the Claude fallback |
 | `tests/api` | Every route: JSON shape, caching, error codes, empty states, HTML escaping |
-| `tests/e2e` | Playwright: front page, ticker search, ticker bar (prices, add, remove, saved after reload, errors), not-found and invalid input, mobile layout, dark mode (system default, toggle, saved after reload), ticker news side panel, market research cards (risks first, metrics table, risk summary, add/remove, phone layout) |
+| `tests/e2e` | Playwright: front page, ticker search, ticker bar (prices, add, remove, saved after reload, errors), not-found and invalid input, mobile layout, dark mode (system default, toggle, saved after reload), ticker news side panel, market research tabs (one tab per company with a risk dot, arrow keys, risks first, key number tiles, "Show" for all fundamentals, add/remove, phone layout) |
 
 ## CI
 
