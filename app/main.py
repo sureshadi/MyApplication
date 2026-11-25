@@ -64,6 +64,7 @@ def create_app(settings: Settings | None = None, analyst_factory=research.defaul
     )
     throttle = auth.LoginThrottle()
     app.state.auth = authenticator
+    app.state.login_throttle = throttle
 
     def signed_in(request: Request) -> bool:
         return authenticator.valid_token(request.cookies.get(auth.COOKIE_NAME))
