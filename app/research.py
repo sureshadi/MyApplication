@@ -1,11 +1,12 @@
-"""Market research agent for the My Portfolio tab.
+"""Market research agent for the Portfolio tab.
 
 For each company it follows the financial-report-analysis method:
 
 1. Identify the latest report on SEC EDGAR (10-K / 10-Q).
 2. Extract the key figures for the latest period and the same period a year earlier
    (revenue, margins, net income, EPS, cash flow, cash, debt, buybacks, dividends).
-3. Calculate the changes in code: year-over-year growth and margin changes in percentage points.
+3. Calculate the changes in code: growth against the chosen earlier period (a year by default)
+   and margin changes in percentage points.
 4. Explain the drivers and guidance. With ANTHROPIC_API_KEY set, Claude writes these from the
    figures and recent headlines; without a key, plain rule-based bullets are used.
 5. Check for red flags (receivables or inventory growing faster than revenue, cash flow falling
@@ -18,6 +19,7 @@ estimated. The output is factual analysis only, not financial advice.
 from __future__ import annotations
 
 import asyncio
+import calendar
 import json
 import logging
 import os
@@ -99,8 +101,35 @@ class Fact:
 
 
 @dataclass(frozen=True)
+class Comparison:
+    """What the figures are compared with for one Portfolio period choice."""
+
+    key: str  # 1M, 3M, 6M, 1Y, 2Y, 5Y
+    months: int  # how far back the comparison filing is (filings are quarterly, so never under 3)
+    label: str  # column heading, e.g. "Prior quarter"
+    phrase: str  # e.g. "year over year"
+    earlier: str  # e.g. "a year earlier"
+    price_window: str  # share price window, e.g. "1 month"
+
+    def to_dict(self) -> dict:
+        return {"key": self.key, "label": self.label, "phrase": self.phrase, "earlier": self.earlier,
+                "price_window": self.price_window}
+
+
+COMPARISONS = {
+    "1M": Comparison("1M", 3, "Prior quarter", "quarter over quarter", "a quarter earlier", "1 month"),
+    "3M": Comparison("3M", 3, "Prior quarter", "quarter over quarter", "a quarter earlier", "3 months"),
+    "6M": Comparison("6M", 6, "2 quarters ago", "versus two quarters earlier", "two quarters earlier", "6 months"),
+    "1Y": Comparison("1Y", 12, "Prior year", "year over year", "a year earlier", "1 year"),
+    "2Y": Comparison("2Y", 24, "2 years ago", "over two years", "two years earlier", "2 years"),
+    "5Y": Comparison("5Y", 60, "5 years ago", "over five years", "five years earlier", "5 years"),
+}
+DEFAULT_COMPARISON = COMPARISONS["1Y"]
+
+
+@dataclass(frozen=True)
 class Figure:
-    """One metric for the latest period and the same period a year earlier."""
+    """One metric for the latest period and the same span of time some months earlier (a year by default)."""
 
     key: str
     current: Fact
@@ -145,22 +174,51 @@ def _facts_for(facts: dict, key: str) -> list[Fact]:
     return []
 
 
-def _year_earlier(candidates: list[Fact], current: Fact) -> Fact | None:
-    """The fact covering the same span of time, ending about one year before `current`."""
+def _earlier(candidates: list[Fact], current: Fact, months: int = 12) -> Fact | None:
+    """The fact covering the same span of time, ending about `months` before `current`."""
+    target = months * 30.44
     best = None
     for f in candidates:
         gap = (current.end - f.end).days
-        if not 345 <= gap <= 385:
+        if abs(gap - target) > 20:
             continue
         if current.start is not None and abs(f.days - current.days) > 20:
             continue
-        if best is None or abs(gap - 365) < abs((current.end - best.end).days - 365):
+        if best is None or abs(gap - target) < abs((current.end - best.end).days - target):
             best = f
     return best
 
 
-def latest_figure(facts: dict, key: str, end: date | None = None) -> Figure | None:
-    """Latest value for a metric with its year-earlier comparison.
+def _trailing_year(candidates: list[Fact], end: date) -> Fact | None:
+    """Twelve months ending at `end`, built from filed values: last fiscal year + this year to date
+    - the same stretch a year before. Lets an annual figure be compared with a point mid-year."""
+    exact = [f for f in candidates if abs((f.end - end).days) <= 5 and abs(f.days - 365) <= 20]
+    if exact:
+        return exact[0]
+    for ytd in (f for f in candidates if abs((f.end - end).days) <= 5 and f.start and f.days < 345):
+        year = next((f for f in candidates if abs(f.days - 365) <= 20 and abs((ytd.start - f.end).days - 1) <= 7), None)
+        before = _earlier(candidates, ytd, 12)
+        if year and before:
+            return Fact(year.value + ytd.value - before.value, ytd.end, _months_back(ytd.end, 12), ytd.form, ytd.filed)
+    return None
+
+
+def _months_back(day: date, months: int) -> date:
+    y, m = divmod(day.month - 1 - months, 12)
+    year, month = day.year + y, m + 1
+    return day.replace(year=year, month=month, day=min(day.day, calendar.monthrange(year, month)[1]))
+
+
+def _prior(candidates: list[Fact], current: Fact, months: int) -> Fact | None:
+    found = _earlier(candidates, current, months)
+    if found is None and current.start is not None and abs(current.days - 365) <= 20 and months % 12:
+        # An annual figure has no annual period ending a quarter earlier; use the trailing year there.
+        found = _trailing_year(candidates, _months_back(current.end, months))
+    return found
+
+
+def latest_figure(facts: dict, key: str, end: date | None = None, months: int = 12) -> Figure | None:
+    """Latest value for a metric, compared with the same span ending `months` earlier (a year by default).
 
     Flows (revenue, cash flow) use the shortest period of at least a quarter that ends on the
     latest date: a quarter for income statement lines, year-to-date for cash flow lines that
@@ -178,7 +236,7 @@ def latest_figure(facts: dict, key: str, end: date | None = None) -> Figure | No
     if not at_end:
         return None
     current = min(at_end, key=lambda f: f.days)
-    return Figure(key, current, _year_earlier(candidates, current))
+    return Figure(key, current, _prior(candidates, current, months))
 
 
 def period_label(fact: Fact) -> str:
@@ -250,26 +308,26 @@ class Fundamentals:
     metrics: list[Metric]
 
 
-def extract_fundamentals(facts: dict) -> Fundamentals:
-    """Key figures and the metrics table, all computed from filed values."""
+def extract_fundamentals(facts: dict, months: int = 12) -> Fundamentals:
+    """Key figures and the metrics table, all computed from filed values, compared `months` back."""
     figs: dict[str, Figure] = {}
-    revenue = latest_figure(facts, "revenue")
+    revenue = latest_figure(facts, "revenue", months=months)
     if revenue:
         figs["revenue"] = revenue
     # Income statement lines line up with the revenue period when possible.
     for key in ("gross_profit", "operating_income", "net_income", "eps_diluted"):
-        fig = (latest_figure(facts, key, revenue.current.end) if revenue else None) or latest_figure(facts, key)
+        fig = (latest_figure(facts, key, revenue.current.end, months) if revenue else None) or latest_figure(facts, key, months=months)
         if fig:
             figs[key] = fig
-    ocf = latest_figure(facts, "operating_cash_flow")
+    ocf = latest_figure(facts, "operating_cash_flow", months=months)
     if ocf:
         figs["operating_cash_flow"] = ocf
     for key in ("capex", "buybacks", "dividends"):
-        fig = (latest_figure(facts, key, ocf.current.end) if ocf else None) or latest_figure(facts, key)
+        fig = (latest_figure(facts, key, ocf.current.end, months) if ocf else None) or latest_figure(facts, key, months=months)
         if fig:
             figs[key] = fig
     for key in INSTANT:
-        fig = latest_figure(facts, key)
+        fig = latest_figure(facts, key, months=months)
         if fig:
             figs[key] = fig
 
@@ -346,15 +404,15 @@ def money(value: float | None) -> str:
     return f"{sign}${v:,.0f}"
 
 
-def red_flags(f: Fundamentals, price_change_pct: float | None = None) -> list[Risk]:
-    figs, risks = f.figures, []
+def red_flags(f: Fundamentals, price_change_pct: float | None = None, comparison: Comparison = DEFAULT_COMPARISON) -> list[Risk]:
+    figs, risks, vs = f.figures, [], comparison.phrase
     rev, ni = figs.get("revenue"), figs.get("net_income")
     rev_g = rev.change_pct if rev else None
 
     if rev_g is not None and rev_g < 0:
         risks.append(Risk(
             "Revenue is shrinking",
-            f"Revenue fell {abs(rev_g):.1f}% year over year to {money(rev.current.value)} ({_lc(period_label(rev.current))}).",
+            f"Revenue fell {abs(rev_g):.1f}% {vs} to {money(rev.current.value)} ({_lc(period_label(rev.current))}).",
             "high" if rev_g <= -10 else "medium",
         ))
     if ni and ni.current.value < 0:
@@ -366,7 +424,7 @@ def red_flags(f: Fundamentals, price_change_pct: float | None = None) -> list[Ri
     elif ni and ni.change_pct is not None and ni.change_pct <= -20:
         risks.append(Risk(
             "Earnings dropped sharply",
-            f"Net income fell {abs(ni.change_pct):.1f}% year over year to {money(ni.current.value)}.",
+            f"Net income fell {abs(ni.change_pct):.1f}% {vs} to {money(ni.current.value)}.",
             "medium",
         ))
     for key, label, meaning in (
@@ -377,7 +435,7 @@ def red_flags(f: Fundamentals, price_change_pct: float | None = None) -> list[Ri
         if fig and fig.change_pct is not None and rev_g is not None and fig.change_pct - rev_g > 10:
             risks.append(Risk(
                 f"{label} growing faster than revenue",
-                f"{label} rose {fig.change_pct:.1f}% year over year while revenue changed {rev_g:+.1f}%. {meaning}",
+                f"{label} rose {fig.change_pct:.1f}% {vs} while revenue changed {rev_g:+.1f}%. {meaning}",
                 "medium",
             ))
     ocf = figs.get("operating_cash_flow")
@@ -427,7 +485,7 @@ def red_flags(f: Fundamentals, price_change_pct: float | None = None) -> list[Ri
     if price_change_pct is not None and price_change_pct <= -10:
         risks.append(Risk(
             "Share price fell sharply",
-            f"The stock is down {abs(price_change_pct):.1f}% over the last month.",
+            f"The stock is down {abs(price_change_pct):.1f}% over the last {comparison.price_window}.",
             "medium",
             "market",
         ))
@@ -474,6 +532,7 @@ class Analysis:
     analyst: str  # "claude" or "rules"
     period: str = ""
     filings: list[Filing] = field(default_factory=list)
+    comparison: Comparison = DEFAULT_COMPARISON
 
     def to_dict(self) -> dict:
         return {
@@ -484,6 +543,7 @@ class Analysis:
             "headline": self.headline,
             "risks": [r.to_dict() for r in self.risks],
             "metrics": [m.to_dict() for m in self.metrics],
+            "comparison": self.comparison.to_dict(),
             "drivers": self.drivers,
             "guidance": self.guidance,
             "sources": self.sources,
@@ -492,14 +552,14 @@ class Analysis:
         }
 
 
-def rule_based_summary(name: str, f: Fundamentals) -> tuple[str, list[str]]:
+def rule_based_summary(name: str, f: Fundamentals, comparison: Comparison = DEFAULT_COMPARISON) -> tuple[str, list[str]]:
     """Headline and driver bullets written from the computed changes alone."""
     by_name = {m.name: m for m in f.metrics}
     rev, ni = by_name.get("Revenue"), by_name.get("Net income")
     if rev and rev.change is not None:
         direction = "grew" if rev.change > 0 else "fell" if rev.change < 0 else "was flat"
         amount = f" {abs(rev.change):.1f}%" if rev.change else ""
-        headline = f"{name} revenue {direction}{amount} year over year to {money(rev.current)} ({_lc(rev.period)})"
+        headline = f"{name} revenue {direction}{amount} {comparison.phrase} to {money(rev.current)} ({_lc(rev.period)})"
         if ni and ni.current is not None:
             headline += f", with net income of {money(ni.current)}" + (
                 f" ({ni.change:+.1f}%)." if ni.change is not None else "."
@@ -515,7 +575,7 @@ def rule_based_summary(name: str, f: Fundamentals) -> tuple[str, list[str]]:
     for m in f.metrics:
         if m.change is None and m.unit == "usd" and m.current is not None and m.prior is not None and (m.current < 0) != (m.prior < 0):
             swing = "swung to a loss of" if m.current < 0 else "turned positive at"
-            drivers.append(f"{m.name} {swing} {money(abs(m.current))}, from {money(m.prior)} a year earlier (GAAP).")
+            drivers.append(f"{m.name} {swing} {money(abs(m.current))}, from {money(m.prior)} {comparison.earlier} (GAAP).")
             continue
         if m.change is None:
             continue
@@ -524,7 +584,7 @@ def rule_based_summary(name: str, f: Fundamentals) -> tuple[str, list[str]]:
                            f"{abs(m.change):.1f} pp to {m.current:.1f}%.")
         elif m.name in ("Revenue", "Operating income", "Net income", "Free cash flow", "Diluted EPS"):
             value = f"${m.current:.2f}" if m.unit == "eps" else money(m.current)
-            drivers.append(f"{m.name} {m.change:+.1f}% year over year to {value} (GAAP).")
+            drivers.append(f"{m.name} {m.change:+.1f}% {comparison.phrase} to {value} (GAAP).")
     return headline, drivers[:5]
 
 
@@ -572,8 +632,8 @@ def recent_filings(submissions: dict, cik: str, limit: int = 2) -> list[Filing]:
 # ---------------------------------------------------------------------------
 
 ANALYST_SYSTEM = """You are an equity research analyst following a strict financial-report-analysis method.
-You get a company's key figures (already extracted from its SEC filings, with year-over-year changes \
-computed in code), red flags computed in code, its latest filings and recent news headlines.
+You get a company's key figures (already extracted from its SEC filings, with changes against an \
+earlier period computed in code; the "comparison" field says which period), red flags computed in code, its latest filings and recent news headlines.
 
 Write:
 - headline: one or two sentences on how the latest period went.
@@ -686,6 +746,7 @@ async def analyze(
     headlines: list[dict] | None = None,
     price_change_pct: float | None = None,
     analyst=None,
+    comparison: str = "1Y",
 ) -> Analysis:
     """Run the full analysis for one company. Raises CompanyNotFound / ResearchUnavailable."""
     try:
@@ -700,9 +761,10 @@ async def analyze(
         raise ResearchUnavailable(str(exc)) from exc
 
     name = facts.get("entityName") or submissions.get("name") or name
-    fundamentals = extract_fundamentals(facts)
-    risks = red_flags(fundamentals, price_change_pct)
-    headline, drivers = rule_based_summary(name, fundamentals)
+    cmp = COMPARISONS.get(comparison, DEFAULT_COMPARISON)
+    fundamentals = extract_fundamentals(facts, cmp.months)
+    risks = red_flags(fundamentals, price_change_pct, cmp)
+    headline, drivers = rule_based_summary(name, fundamentals, cmp)
     guidance = "Guidance is not part of the structured filing data. Check the company's latest earnings release."
     filings = recent_filings(submissions, cik)
     period = fundamentals.metrics[0].period if fundamentals.metrics else ""
@@ -719,7 +781,9 @@ async def analyze(
                 {"title": h.get("title"), "source": h.get("source"), "published": h.get("published")}
                 for h in (headlines or [])[:12]
             ],
-            "one_month_price_change_pct": price_change_pct,
+            "comparison": f"Figures are compared with {cmp.earlier} ({cmp.phrase}).",
+            "price_change_pct": price_change_pct,
+            "price_change_window": cmp.price_window,
         }
         ai = _clean_ai(await analyst(payload))
         if ai:
@@ -735,4 +799,4 @@ async def analyze(
         {"label": f"{f.form} filed {f.filed} (period {f.period})", "url": f.url} for f in filings
     ] + [{"label": "SEC XBRL company facts", "url": SEC_FACTS_URL.format(cik=cik)}]
     return Analysis(symbol, name, cik, headline, risks, fundamentals.metrics, drivers, guidance,
-                    sources, analyst_kind, period, filings)
+                    sources, analyst_kind, period, filings, cmp)

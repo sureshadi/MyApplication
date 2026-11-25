@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import calendar
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -169,5 +170,62 @@ async def get_quote(client: httpx.AsyncClient, symbol: str, finnhub_api_key: str
             raise QuoteNotFound(symbol)
         resp.raise_for_status()
         return parse_yahoo_chart(symbol, resp.json())
+    except httpx.HTTPError as exc:
+        raise QuoteUnavailable(str(exc)) from exc
+
+
+# Price change over each period the Portfolio page offers. Months back from the latest close.
+PERIOD_MONTHS = {"1M": 1, "3M": 3, "6M": 6, "1Y": 12, "2Y": 24, "5Y": 60}
+
+
+def _months_before(day: datetime, months: int) -> datetime:
+    y, m = divmod(day.month - 1 - months, 12)
+    year, month = day.year + y, m + 1
+    return day.replace(year=year, month=month, day=min(day.day, calendar.monthrange(year, month)[1]))
+
+
+def parse_performance(data: dict) -> dict[str, float | None]:
+    """Percent change from the close on or before each period start to the latest price.
+
+    A period is None when the history doesn't reach back that far (for example a recent IPO).
+    """
+    chart = data.get("chart") or {}
+    if chart.get("error") or not chart.get("result"):
+        raise QuoteNotFound("")
+    result = chart["result"][0]
+    closes = ((result.get("indicators") or {}).get("quote") or [{}])[0].get("close") or []
+    points = [(t, c) for t, c in zip(result.get("timestamp") or [], closes) if c is not None]
+    price = (result.get("meta") or {}).get("regularMarketPrice") or (points[-1][1] if points else None)
+    if not points or not price:
+        return {k: None for k in PERIOD_MONTHS}
+    latest = datetime.fromtimestamp(points[-1][0], tz=timezone.utc)
+    out: dict[str, float | None] = {}
+    for key, months in PERIOD_MONTHS.items():
+        start = _months_before(latest, months).timestamp()
+        base = None
+        for t, c in points:
+            if t <= start:
+                base = c
+            else:
+                break
+        # Allow a few days of slack for weekends and holidays at the very start of the history.
+        if base is None and points[0][0] - start <= 5 * 86400:
+            base = points[0][1]
+        out[key] = round((price - base) / base * 100, 2) if base else None
+    return out
+
+
+async def get_performance(client: httpx.AsyncClient, symbol: str) -> dict[str, float | None]:
+    """Price change over 1M, 3M, 6M, 1Y, 2Y and 5Y from Yahoo Finance's daily history."""
+    try:
+        resp = await client.get(
+            YAHOO_CHART_URL.format(symbol=symbol),
+            params={"range": "5y", "interval": "1d"},
+            headers={"User-Agent": USER_AGENT},
+        )
+        if resp.status_code == 404:
+            raise QuoteNotFound(symbol)
+        resp.raise_for_status()
+        return parse_performance(resp.json())
     except httpx.HTTPError as exc:
         raise QuoteUnavailable(str(exc)) from exc

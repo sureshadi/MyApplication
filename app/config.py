@@ -91,14 +91,15 @@ class Settings:
     max_quote_symbols: int = 25
     # Keeps a balanced mix: no single outlet can fill more than this many front-page slots.
     max_items_per_source: int = field(default_factory=lambda: int(os.getenv("MAX_ITEMS_PER_SOURCE", "12")))
-    # Market research (My Portfolio). SEC asks automated clients to identify themselves with a
+    # Market research (Portfolio). SEC asks automated clients to identify themselves with a
     # name and contact email, e.g. "Jane Doe jane@example.com".
     sec_user_agent: str = field(
         default_factory=lambda: os.getenv("SEC_USER_AGENT") or "MarketHeadlines research agent admin@market-headlines.example"
     )
     # Filings change at most a few times a quarter, so analyses are kept for hours, not minutes.
     research_ttl_seconds: int = field(default_factory=lambda: int(os.getenv("RESEARCH_TTL_SECONDS", "21600")))
-    # Headlines shown in the side panel when a ticker is clicked on My Portfolio.
+    performance_ttl_seconds: int = field(default_factory=lambda: int(os.getenv("PERFORMANCE_TTL_SECONDS", "3600")))
+    # Headlines shown in the side panel when a ticker is clicked on Portfolio.
     panel_news_items: int = 3
 
 

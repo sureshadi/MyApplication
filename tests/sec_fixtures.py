@@ -25,8 +25,29 @@ Y_CUR = ("2025-09-28", "2026-09-27")  # fiscal year
 Y_PRI = ("2024-09-29", "2025-09-27")
 
 
+# Older periods, so every Portfolio period choice (prior quarter, 2 quarters, 2 and 5 years) has data.
+# Each entry: (start, end, share of the current or prior value).
+QUARTER_HISTORY = [
+    ("2026-03-29", "2026-06-28", "cur", 0.95),  # prior quarter
+    ("2025-12-28", "2026-03-28", "cur", 0.92),  # two quarters ago
+    ("2024-06-30", "2024-09-28", "pri", 0.90),  # same quarter two years ago
+    ("2021-06-27", "2021-09-25", "pri", 0.60),  # same quarter five years ago
+]
+YEAR_HISTORY = [  # annual lines: year-to-date pieces (for trailing twelve months) and older years
+    ("2025-09-28", "2026-06-28", "cur", 0.74), ("2024-09-29", "2025-06-28", "pri", 0.73),
+    ("2025-09-28", "2026-03-28", "cur", 0.49), ("2024-09-29", "2025-03-29", "pri", 0.48),
+    ("2023-10-01", "2024-09-28", "pri", 0.90), ("2020-09-27", "2021-09-25", "pri", 0.60),
+]
+INSTANT_HISTORY = [("2026-06-28", "cur", 0.97), ("2026-03-28", "cur", 0.95), ("2024-09-28", "pri", 0.90), ("2021-09-25", "pri", 0.60)]
+
+
 def _flow(cur, pri, period_cur=Q_CUR, period_pri=Q_PRI, unit="USD", filed="2026-10-30", form="10-K"):
-    return {"units": {unit: [
+    history = QUARTER_HISTORY if period_cur == Q_CUR else YEAR_HISTORY
+    older = [
+        {"start": start, "end": end, "val": round((cur if base == "cur" else pri) * share, 4), "form": "10-Q", "filed": "2026-08-01"}
+        for start, end, base, share in history
+    ]
+    return {"units": {unit: older + [
         {"start": period_pri[0], "end": period_pri[1], "val": pri, "form": "10-K", "filed": "2025-10-31"},
         {"start": period_cur[0], "end": period_cur[1], "val": cur, "form": form, "filed": filed},
         # The prior year appears again in the newer filing as a comparative.
@@ -35,7 +56,9 @@ def _flow(cur, pri, period_cur=Q_CUR, period_pri=Q_PRI, unit="USD", filed="2026-
 
 
 def _instant(cur, pri):
-    return {"units": {"USD": [
+    older = [{"end": end, "val": (cur if base == "cur" else pri) * share, "form": "10-Q", "filed": "2026-08-01"}
+             for end, base, share in INSTANT_HISTORY]
+    return {"units": {"USD": older + [
         {"end": Q_PRI[1], "val": pri, "form": "10-K", "filed": "2025-10-31"},
         {"end": Q_CUR[1], "val": cur, "form": "10-K", "filed": "2026-10-30"},
     ]}}

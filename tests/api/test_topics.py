@@ -1,4 +1,4 @@
-"""Section tabs: Financial news (default), Technology news, Health news and My Portfolio."""
+"""Section tabs: Financial news (default), Technology news, Health news and Portfolio."""
 
 from fastapi.testclient import TestClient
 
@@ -40,7 +40,7 @@ class TestTabs:
         assert positions == sorted(positions)
         for label in ("Financial", "Technology", "Health"):
             assert f'{label}<span class="tab-extra"> news</span>' in text
-        assert "<span>My Portfolio</span>" in text
+        assert "<span>Portfolio</span>" in text
 
     def test_financial_news_is_the_default_tab(self, client):
         text = client.get("/").text

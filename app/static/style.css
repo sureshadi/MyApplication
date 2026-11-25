@@ -204,22 +204,30 @@ main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 8px; }
   background: var(--gradient);
 }
 
-/* ---------- My Portfolio page ---------- */
-.ticker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+/* ---------- Portfolio page ---------- */
+.portfolio-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px 20px; flex-wrap: wrap; }
+.period-picker { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.period-label { font-size: .78rem; color: var(--muted); font-weight: 600; }
+.period-seg { display: inline-flex; padding: 3px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); }
+.period-seg button { font: inherit; font-size: .78rem; font-weight: 700; border: 0; background: none; color: var(--muted); padding: 5px 10px; border-radius: 7px; cursor: pointer; }
+.period-seg button:hover { color: var(--fg); }
+.period-seg button[aria-checked="true"] { background: var(--accent); color: #fff; }
+.rp-compare { margin: 8px 0 0; font-size: .78rem; color: var(--muted); background: var(--surface-solid); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; }
+.ticker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
 .ticker-card {
-  position: relative; display: flex; min-height: 84px;
+  position: relative; display: flex; min-height: 70px;
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
   transition: transform .18s ease, border-color .18s ease, background .18s ease;
 }
 .ticker-card:hover { transform: translateY(-2px); border-color: var(--border-strong); background: var(--surface-hover); }
 .ticker-card .chip-link {
   flex: 1; display: grid; grid-template-columns: 1fr auto; grid-template-areas: "sym chg" "name name" "px px";
-  align-content: start; gap: 1px 6px; padding: 11px 13px; text-decoration: none; min-width: 0;
+  align-content: start; gap: 0 6px; padding: 9px 11px; text-decoration: none; min-width: 0;
 }
-.ticker-card .sym { grid-area: sym; font-weight: 800; font-size: .92rem; letter-spacing: -.01em; }
-.ticker-card .name { grid-area: name; color: var(--muted); font-size: .74rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ticker-card .px { grid-area: px; margin-top: 5px; font-size: 1.08rem; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
-.ticker-card .chg { grid-area: chg; align-self: start; font-size: .7rem; font-weight: 700; padding: 1px 6px; border-radius: 6px; font-variant-numeric: tabular-nums; margin-right: 18px; }
+.ticker-card .sym { grid-area: sym; font-weight: 800; font-size: .82rem; letter-spacing: -.01em; }
+.ticker-card .name { grid-area: name; color: var(--muted); font-size: .68rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ticker-card .px { grid-area: px; margin-top: 3px; font-size: .95rem; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.ticker-card .chg { grid-area: chg; align-self: start; font-size: .64rem; font-weight: 700; padding: 1px 5px; border-radius: 6px; font-variant-numeric: tabular-nums; margin-right: 18px; }
 .ticker-card .chg:empty, .ticker-card .px:empty, .ticker-card .name:empty { visibility: hidden; }
 .ticker-card .px:empty::before { content: "–"; }
 .chg.up { color: var(--up); background: var(--up-bg); }
@@ -254,7 +262,7 @@ main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 8px; }
   .ticker-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .ticker-grid { gap: 8px; }
   .ticker-card .chip-link { padding: 10px 11px; }
-  .ticker-card .px { font-size: 1rem; }
+  .ticker-card .px { font-size: .9rem; }
   /* Four equal tabs, icon above a short label, so every tab is visible on a phone. */
   .tabs-inner { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; padding: 0 4px; }
   .tab { flex-direction: column; gap: 4px; padding: 10px 2px 11px; font-size: .84rem; letter-spacing: 0; text-align: center; }

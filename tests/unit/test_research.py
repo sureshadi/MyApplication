@@ -298,3 +298,53 @@ class TestClaudeAnalyst:
             return SimpleNamespace(stop_reason="end_turn", content=[SimpleNamespace(type="text", text="not json")])
 
         assert await self.analyst_with(create)({"symbol": "AAPL"}) is None
+
+
+class TestComparisons:
+    """The Portfolio period picker: figures compared with a quarter, two quarters, or 1, 2 or 5 years earlier."""
+
+    @staticmethod
+    def revenue_and_cash_flow(months):
+        f = research.extract_fundamentals(sec_fixtures.company_facts(), months)
+        by_name = {m.name: m for m in f.metrics}
+        return by_name["Revenue"], by_name["Operating cash flow"], by_name["Cash and equivalents"]
+
+    @pytest.mark.parametrize("key, prior, change", [
+        ("3M", 96.9e9, 5.3), ("6M", 93.84e9, 8.7), ("1Y", 94.0e9, 8.5), ("2Y", 84.6e9, 20.6), ("5Y", 56.4e9, 80.9),
+    ])
+    def test_quarterly_figures_use_the_matching_earlier_quarter(self, key, prior, change):
+        revenue, _, _ = self.revenue_and_cash_flow(research.COMPARISONS[key].months)
+        assert revenue.prior == pytest.approx(prior) and revenue.change == change
+
+    def test_annual_figures_use_the_trailing_year_a_quarter_earlier(self):
+        # Fiscal 2025 (118B) + nine months of 2026 (0.74 x 110B) - nine months of 2025 (0.73 x 118B).
+        _, ocf, _ = self.revenue_and_cash_flow(3)
+        assert ocf.prior == pytest.approx(118e9 + 0.74 * 110e9 - 0.73 * 118e9)
+
+    def test_balance_sheet_figures_use_the_earlier_date(self):
+        _, _, cash = self.revenue_and_cash_flow(3)
+        assert cash.prior == pytest.approx(0.97 * 35e9)
+
+    def test_missing_history_leaves_no_comparison(self):
+        facts = sec_fixtures.company_facts()
+        rev = facts["facts"]["us-gaap"]["RevenueFromContractWithCustomerExcludingAssessedTax"]["units"]["USD"]
+        rev[:] = [e for e in rev if not e["end"].startswith("2021")]
+        f = research.extract_fundamentals(facts, 60)
+        assert f.metrics[0].prior is None and f.metrics[0].change is None
+
+    def test_wording_follows_the_comparison(self):
+        cmp = research.COMPARISONS["3M"]
+        f = research.extract_fundamentals(sec_fixtures.company_facts(), cmp.months)
+        risks = research.red_flags(f, price_change_pct=-15.0, comparison=cmp)
+        details = " ".join(r.detail for r in risks)
+        assert "year over year" not in details and "over the last 3 months" in details
+        headline, drivers = research.rule_based_summary("Apple Inc.", f, cmp)
+        assert "quarter over quarter" in headline and all("year over year" not in d for d in drivers)
+
+    async def test_analysis_reports_its_comparison(self, sec):
+        async with httpx.AsyncClient() as client:
+            a = await research.analyze(client, "AAPL", user_agent="test", comparison="2Y")
+        d = a.to_dict()
+        assert d["comparison"] == {"key": "2Y", "label": "2 years ago", "phrase": "over two years",
+                                    "earlier": "two years earlier", "price_window": "2 years"}
+        assert d["metrics"][0]["prior"] == pytest.approx(84.6e9)

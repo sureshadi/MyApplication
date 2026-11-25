@@ -61,7 +61,7 @@ def tab(page: Page, slug: str):
 
 def test_tabs_switch_the_page(page: Page, live_server):
     page.goto(live_server)
-    expect(page.get_by_test_id("tab")).to_have_text(["Financial news", "Technology news", "Health news", "My Portfolio"])
+    expect(page.get_by_test_id("tab")).to_have_text(["Financial news", "Technology news", "Health news", "Portfolio"])
     expect(tab(page, "financial")).to_have_attribute("aria-current", "page")
     expect(page.get_by_role("heading", name="Latest financial news")).to_be_visible()
 

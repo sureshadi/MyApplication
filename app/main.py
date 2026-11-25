@@ -36,6 +36,7 @@ def create_app(settings: Settings | None = None, analyst_factory=research.defaul
     app.state.settings = settings
     app.state.cache = TTLCache(settings.cache_ttl_seconds)
     app.state.research_cache = TTLCache(settings.research_ttl_seconds)
+    app.state.performance_cache = TTLCache(settings.performance_ttl_seconds)
     app.state.analyst = analyst_factory() if analyst_factory else None
     app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
     templates = Jinja2Templates(directory=BASE_DIR / "templates")
@@ -131,6 +132,15 @@ def create_app(settings: Settings | None = None, analyst_factory=research.defaul
             quote = await stocks.get_quote(request.app.state.http, symbol, settings.finnhub_api_key)
             cache.set(f"quote:{symbol}", quote)
         return quote
+
+    async def cached_performance(request: Request, symbol: str) -> dict[str, float | None]:
+        """Price change over 1M..5Y for a normalized symbol, cached. Raises QuoteNotFound / QuoteUnavailable."""
+        cache: TTLCache = request.app.state.performance_cache
+        perf = cache.get(f"perf:{symbol}")
+        if perf is None:
+            perf = await stocks.get_performance(request.app.state.http, symbol)
+            cache.set(f"perf:{symbol}", perf)
+        return perf
 
     async def ticker_news(request: Request, symbol: str) -> list[news.NewsItem]:
         """Latest headlines about one company, newest first (cached)."""
@@ -313,6 +323,24 @@ def create_app(settings: Settings | None = None, analyst_factory=research.defaul
 
         return {"quotes": await asyncio.gather(*(one(s) for s in wanted))}
 
+    @app.get("/api/performance")
+    async def api_performance(request: Request, symbols: str):
+        """Price change over 1M, 3M, 6M, 1Y, 2Y and 5Y for each symbol (the Portfolio period picker)."""
+        try:
+            wanted = stocks.parse_symbol_list(symbols, settings.max_quote_symbols)
+        except stocks.InvalidSymbol as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+        async def one(symbol: str) -> dict:
+            try:
+                return {"symbol": symbol, "changes": await cached_performance(request, symbol), "error": None}
+            except stocks.QuoteNotFound:
+                return {"symbol": symbol, "changes": None, "error": "not_found"}
+            except stocks.QuoteUnavailable:
+                return {"symbol": symbol, "changes": None, "error": "unavailable"}
+
+        return {"periods": list(stocks.PERIOD_MONTHS), "performance": await asyncio.gather(*(one(s) for s in wanted))}
+
     @app.get("/api/ticker/{symbol}")
     async def api_ticker(request: Request, symbol: str):
         quote, related = await ticker_data(request, symbol)
@@ -320,7 +348,7 @@ def create_app(settings: Settings | None = None, analyst_factory=research.defaul
 
     @app.get("/api/ticker/{symbol}/news")
     async def api_ticker_news(request: Request, symbol: str, limit: int = Query(3, ge=1, le=30)):
-        """Top headlines for one company: what the My Portfolio side panel shows."""
+        """Top headlines for one company: what the Portfolio side panel shows."""
         try:
             normalized = stocks.normalize_symbol(symbol)
         except stocks.InvalidSymbol as exc:
@@ -351,22 +379,27 @@ def create_app(settings: Settings | None = None, analyst_factory=research.defaul
         return data
 
     @app.get("/api/research/{symbol}")
-    async def api_research(request: Request, symbol: str):
-        """Market research for one company: risks first, then fundamentals, drivers and guidance."""
+    async def api_research(request: Request, symbol: str, period: str = "1Y"):
+        """Market research for one company: risks first, then fundamentals, drivers and guidance.
+
+        `period` (1M, 3M, 6M, 1Y, 2Y, 5Y) sets what the figures are compared with and the share price window.
+        """
         try:
             normalized = stocks.normalize_symbol(symbol)
         except stocks.InvalidSymbol as exc:
             raise HTTPException(status_code=400, detail=str(exc))
+        period = period.upper()
+        if period not in research.COMPARISONS:
+            raise HTTPException(status_code=400, detail=f"period must be one of {', '.join(research.COMPARISONS)}")
         cache: TTLCache = request.app.state.research_cache
-        cached = cache.get(f"research:{normalized}")
+        cached = cache.get(f"research:{normalized}:{period}")
         if cached is not None:
             return cached
 
         price_change = None
         try:
-            quote = await cached_quote(request, normalized)
-            if len(quote.history) >= 2 and quote.history[0].close:
-                price_change = round((quote.price - quote.history[0].close) / quote.history[0].close * 100, 1)
+            change = (await cached_performance(request, normalized)).get(period)
+            price_change = round(change, 1) if change is not None else None
         except (stocks.QuoteNotFound, stocks.QuoteUnavailable):
             pass
         headlines = [i.to_dict() for i in await ticker_news(request, normalized)]
@@ -379,6 +412,7 @@ def create_app(settings: Settings | None = None, analyst_factory=research.defaul
                 headlines=headlines,
                 price_change_pct=price_change,
                 analyst=request.app.state.analyst,
+                comparison=period,
             )
         except research.CompanyNotFound:
             raise HTTPException(
@@ -388,7 +422,7 @@ def create_app(settings: Settings | None = None, analyst_factory=research.defaul
         except research.ResearchUnavailable:
             raise HTTPException(status_code=503, detail="SEC EDGAR is temporarily unavailable")
         result = analysis.to_dict()
-        cache.set(f"research:{normalized}", result)
+        cache.set(f"research:{normalized}:{period}", result)
         return result
 
     @app.get("/healthz")
