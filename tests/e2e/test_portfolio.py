@@ -33,7 +33,7 @@ def chip(page: Page, symbol: str):
 
 def open_portfolio(page: Page, live_server: str):
     page.goto(live_server)
-    page.get_by_role("link", name="Portfolio").click()
+    page.locator('[data-testid="tab"][data-tab="portfolio"]').click()  # not a headline that says "Portfolio"
     expect(page).to_have_url(re.compile(r"/portfolio$"))
 
 

@@ -46,11 +46,15 @@ def test_pick_a_source_in_sidebar_filters_headlines(page: Page, live_server):
 
 
 def test_sidebar_counts_match_the_headlines(page: Page, live_server):
+    """"All sources" counts the mixed front page (capped per source); each source counts its own page,
+    which can hold more of that source's headlines than the mixed page shows."""
     page.goto(live_server)
     total = count_of(source_link(page, "all"))
     expect(page.get_by_test_id("news-item")).to_have_count(total)
-    per_source = [count_of(l) for l in page.locator('[data-testid="source-link"]:not([data-slug="all"])').all()]
-    assert sum(per_source) == total
+    shown = page.locator(".news-source").all_inner_texts()
+    for link in page.locator('[data-testid="source-link"]:not([data-slug="all"])').all():
+        name = link.locator(".source-name").inner_text().strip()
+        assert count_of(link) >= shown.count(name), name
 
 
 @local_only
