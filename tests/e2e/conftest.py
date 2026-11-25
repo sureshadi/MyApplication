@@ -63,7 +63,8 @@ def credentials() -> tuple[str, str]:
     """Portfolio username and password: test-only ones locally, the real ones from the environment remotely."""
     if not REMOTE:
         return TEST_USER, TEST_PASSWORD
-    user, password = os.getenv("PORTFOLIO_USER"), os.getenv("PORTFOLIO_PASSWORD")
+    # Strip stray spaces and newlines, which are easy to paste into a CI secret by accident.
+    user, password = os.getenv("PORTFOLIO_USER", "").strip(), os.getenv("PORTFOLIO_PASSWORD", "").strip()
     if not user or not password:
         pytest.exit("Set PORTFOLIO_USER and PORTFOLIO_PASSWORD to run the browser tests against BASE_URL", returncode=4)
     return user, password

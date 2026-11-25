@@ -114,24 +114,25 @@ def test_tabs_switch_the_page(page: Page, live_server):
     expect(tab(page, "financial")).to_have_attribute("aria-current", "page")
     expect(page.get_by_role("heading", name="Latest financial news")).to_be_visible()
 
-    page.get_by_role("link", name="Health news").click()
+    tab(page, "health").click()
     expect(page).to_have_url(re.compile(r"/news/health$"))
     expect(page.get_by_role("heading", name="Latest health news")).to_be_visible()
     expect(tab(page, "health")).to_have_attribute("aria-current", "page")
     expect(tab(page, "financial")).not_to_have_attribute("aria-current", "page")
     expect(page.get_by_test_id("news-item").first).to_be_visible()
 
-    page.get_by_role("link", name="Technology news").click()
+    tab(page, "technology").click()
     expect(page).to_have_url(re.compile(r"/news/technology$"))
     expect(page.get_by_role("heading", name="Latest technology news")).to_be_visible()
     expect(tab(page, "technology")).to_have_attribute("aria-current", "page")
     expect(page.get_by_test_id("news-item").first).to_be_visible()
 
-    page.get_by_role("link", name="Portfolio").click()
+    # Scoped to the tab bar: real headlines can have "Portfolio" in their title too.
+    tab(page, "portfolio").click()
     expect(page).to_have_url(re.compile(r"/portfolio$"))
     expect(tab(page, "portfolio")).to_have_attribute("aria-current", "page")
 
-    page.get_by_role("link", name="Financial news").click()
+    tab(page, "financial").click()
     expect(page.get_by_role("heading", name="Latest financial news")).to_be_visible()
 
 
