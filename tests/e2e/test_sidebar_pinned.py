@@ -3,11 +3,11 @@
 import pytest
 from playwright.sync_api import Page, expect
 
-pytestmark = pytest.mark.e2e
+pytestmark = [pytest.mark.e2e, pytest.mark.remote_safe]
 
 
 def _make_page_long(page: Page):
-    # The sample data has only a few headlines; make the feed tall so the page can really scroll.
+    # The sample data has only a few headlines (and live feeds vary); make the feed tall so the page can really scroll.
     page.evaluate("document.querySelector('.feed').style.minHeight = '4000px'")
 
 
@@ -18,6 +18,10 @@ def _top(page: Page, testid: str) -> float:
 def _scroll_to(page: Page, y: int):
     page.evaluate(f"window.scrollTo(0, {y})")
     page.wait_for_function(f"Math.abs(window.scrollY - {y}) < 2 || window.scrollY + window.innerHeight >= document.body.scrollHeight - 2")
+
+
+def _source_slugs(page: Page) -> list[str]:
+    return page.locator('[data-testid="source-link"]').evaluate_all("els => els.map(e => e.dataset.slug)")
 
 
 @pytest.mark.parametrize("width", [1440, 1280, 1000])
@@ -53,16 +57,19 @@ def test_sidebar_still_works_after_scrolling(page: Page, live_server):
     start = _top(page, "source-sidebar")
     _make_page_long(page)
     _scroll_to(page, 1500)
-    page.locator('[data-testid="source-link"][data-slug="cnbc"]').click()
-    expect(page.get_by_test_id("feed-heading")).to_have_text("Latest from CNBC")
+    link = page.locator('[data-testid="source-link"]:not([data-slug="all"])').first
+    name = link.get_attribute("data-source")
+    link.click()
+    expect(page.get_by_test_id("feed-heading")).to_have_text(f"Latest from {name}")
     assert abs(_top(page, "source-sidebar") - start) < 1
 
 
 def test_sidebar_position_matches_on_every_source(page: Page, live_server):
     page.set_viewport_size({"width": 1280, "height": 800})
+    page.goto(live_server)
     tops = []
-    for q in ("", "?source=cnbc", "?source=marketwatch", "?source=broken"):
-        page.goto(live_server + "/" + q)
+    for slug in _source_slugs(page):
+        page.goto(live_server + ("/" if slug == "all" else f"/?source={slug}"))
         tops.append(_top(page, "source-sidebar"))
     assert max(tops) - min(tops) < 1
 

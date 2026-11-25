@@ -1,6 +1,6 @@
 name: Live site tests
 
-# Runs the Playwright sign-in tests against a deployed site (Actions → Live site tests → Run workflow).
+# Runs the Playwright browser tests (sign-in, pages, portfolio, dark mode...) against a deployed site (Actions → Live site tests → Run workflow).
 # Needs repository secrets PORTFOLIO_USER and PORTFOLIO_PASSWORD (Settings → Secrets and variables → Actions).
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ on:
 
 jobs:
   live:
-    name: Sign-in tests against ${{ inputs.base_url }}
+    name: Browser tests against ${{ inputs.base_url }}
     runs-on: ubuntu-latest
     # One run at a time, so two runs can't add up wrong-password attempts on the live site.
     concurrency: live-site-tests
