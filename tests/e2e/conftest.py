@@ -5,8 +5,13 @@ Set BASE_URL to run against a deployed site instead, e.g.
 
     BASE_URL=https://market-headlines.onrender.com PORTFOLIO_USER=... PORTFOLIO_PASSWORD=... pytest -m e2e
 
-Against a deployed site only tests marked `remote_safe` run (the sign-in tests): the rest rely on mocked
-news and prices. Credentials then come from PORTFOLIO_USER and PORTFOLIO_PASSWORD.
+Against a deployed site, tests marked `remote_safe` run. They check layout and behaviour (pages render, tabs
+switch, the period picker changes values, dark mode toggles...) rather than exact headlines and prices.
+Tests that also carry `local_only` check the mocked data exactly, so they only run against the local server.
+Credentials then come from PORTFOLIO_USER and PORTFOLIO_PASSWORD.
+
+The portfolio's tickers live in the browser's localStorage, and every test gets a fresh browser context,
+so adding or removing tickers in a test never changes anyone's real portfolio.
 """
 
 from __future__ import annotations
@@ -40,8 +45,17 @@ def pytest_collection_modifyitems(config, items):
         return
     skip = pytest.mark.skip(reason=f"needs the local test server with mocked data (BASE_URL={BASE_URL})")
     for item in items:
-        if "e2e" in item.keywords and "remote_safe" not in item.keywords:
+        if "e2e" in item.keywords and ("remote_safe" not in item.keywords or "local_only" in item.keywords):
             item.add_marker(skip)
+
+
+def no_horizontal_scroll(page) -> bool:
+    return page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+
+
+# Formats that hold for any real price or change, used instead of exact mocked values on the live site.
+PRICE = r"^\d[\d,]*\.\d\d$"
+PERCENT = r"^[+-]?\d[\d,]*\.\d\d%$"
 
 
 @pytest.fixture(scope="session")
@@ -116,6 +130,13 @@ def live_server(request):
         yield f"http://127.0.0.1:{port}"
         server.should_exit = True
         thread.join(timeout=5)
+
+
+@pytest.fixture(scope="session")
+def base_url(live_server):
+    """Overrides pytest-playwright's own base_url fixture, which pytest 9.2+ warns about
+    ("Session-scoped fixtures defined as instance methods are deprecated"). Also lets tests use page.goto("/...")."""
+    return live_server
 
 
 @pytest.fixture(scope="session")

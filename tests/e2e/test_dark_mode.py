@@ -1,7 +1,10 @@
 import pytest
 from playwright.sync_api import Browser, Page, expect
 
-pytestmark = pytest.mark.e2e
+from tests.e2e.conftest import no_horizontal_scroll
+
+# Nothing here depends on the news or prices, so all of it also runs against the live site (BASE_URL).
+pytestmark = [pytest.mark.e2e, pytest.mark.remote_safe]
 
 PAGES = ["/", "/news/technology", "/news/health", "/portfolio", "/ticker/AAPL"]
 
@@ -99,4 +102,4 @@ def test_toggle_visible_on_phone_without_horizontal_scroll(page: Page, live_serv
     page.set_viewport_size({"width": 390, "height": 844})
     page.goto(live_server)
     expect(page.get_by_test_id("theme-toggle")).to_be_visible()
-    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+    assert no_horizontal_scroll(page)
