@@ -23,13 +23,19 @@ def _free_port() -> int:
 
 
 @pytest.fixture(scope="session")
-def live_server():
+def live_app():
+    """The app the browser tests talk to (lets tests reach its state, e.g. the sign-in throttle)."""
+    return create_app(make_settings(), analyst_factory=None)
+
+
+@pytest.fixture(scope="session")
+def live_server(live_app):
     port = _free_port()
     # Let requests to the local server itself through; everything else is mocked.
     with respx.mock(assert_all_called=False) as router:
         router.route(host="127.0.0.1").pass_through()
         install_default_routes(router)
-        server = uvicorn.Server(uvicorn.Config(create_app(make_settings(), analyst_factory=None), host="127.0.0.1", port=port, log_level="warning"))
+        server = uvicorn.Server(uvicorn.Config(live_app, host="127.0.0.1", port=port, log_level="warning"))
         thread = threading.Thread(target=server.run, daemon=True)
         thread.start()
         deadline = time.time() + 10

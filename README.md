@@ -82,13 +82,14 @@ pip install -r requirements-dev.txt
 pytest                 # unit + API tests
 python -m playwright install chromium
 pytest -m e2e          # browser tests against a live local server
+pytest -m e2e tests/e2e/test_login.py --headed   # watch the sign-in tests in a browser
 ```
 
 | Folder | What it covers |
 | --- | --- |
 | `tests/unit` | Feed parsing, HTML cleaning, merging and de-duplication, quote parsing, symbol validation, cache, research figures, changes against each period (including trailing twelve months for annual lines), price changes over 1M to 5Y, red flags and the Claude fallback |
 | `tests/api` | Every route: JSON shape, caching, error codes, empty states, HTML escaping |
-| `tests/e2e` | Playwright: front page, ticker search, ticker bar (prices, add, remove, saved after reload, errors), not-found and invalid input, mobile layout, dark mode (system default, toggle, saved after reload), ticker news side panel, market research tabs (one tab per company with a risk dot, arrow keys, risks first, key number tiles, "Show" for all fundamentals, add/remove, phone layout), period picker (badges, research comparisons, saved choice, arrow keys, phone fit) |
+| `tests/e2e` | Playwright: front page, ticker search, ticker bar (prices, add, remove, saved after reload, errors), not-found and invalid input, mobile layout, dark mode (system default, toggle, saved after reload), ticker news side panel, market research tabs (one tab per company with a risk dot, arrow keys, risks first, key number tiles, "Show" for all fundamentals, add/remove, phone layout), period picker (badges, research comparisons, saved choice, arrow keys, phone fit), Portfolio sign-in (`test_login.py`, with a `LoginPage` page object in `tests/e2e/pages/`: correct sign-in, wrong username or password, empty fields, redirects, sign out, lockout after 5 wrong tries, staying signed in, phone and dark mode) |
 
 ## CI
 
