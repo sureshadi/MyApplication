@@ -110,3 +110,13 @@ It prints the total and a per-file table with the lines and branches no test rea
 
 - **GitHub Actions:** `.github/workflows/tests.yml` runs unit/API tests and then browser tests on every push and pull request, and uploads JUnit results. A third job combines their coverage, shows the total and per-file table on the run's summary page, and uploads the HTML report as the `coverage-report` artifact.
 - **Jenkins:** `Jenkinsfile` runs the same stages inside the official Playwright Python Docker image and publishes JUnit results. It also prints the combined coverage in the console log and keeps the HTML report with the build's artifacts.
+- **Testing agent:** `.github/workflows/testing-agent.yml` runs on every pull request that changes the web app (`app/` or `requirements.txt`). A Claude agent (Claude Opus 5.5 through the [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk)) reads the diff, writes Playwright tests for the change in this repo's style as `tests/e2e/agent/test_pr<N>_<topic>.py`, and runs them against the local mocked server. For each failure it decides whether the test or the app is wrong: it fixes its own test, or reports the app bug with a suggested fix. The workflow then runs the tests again itself, reruns failures once to catch flaky tests, comments on the PR, and commits the tests to the PR branch when they are trustworthy (none flaky, every failure a confirmed app bug), so they keep running with the rest of the browser tests. Add the label `agent-retest` to run it again.
+
+  Setup: add an `ANTHROPIC_API_KEY` repository secret (Settings → Secrets and variables → Actions). Without it the agent posts a one-line note instead of running.
+
+  Guardrails, enforced in code by `check_tool` in `agents/testing_agent.py` (every tool call is checked before it runs): the agent can read the repository, write only its own test files in `tests/e2e/agent/`, and run only `pytest` on those files and read-only `git` commands. It has no network tools, can't change app code, and never holds a GitHub token; the workflow commits and comments. It stops after 40 turns or $3, and the job times out after 20 minutes. Pull requests from forks don't run it, since they get no secrets. A run costs roughly $0.50 to $1.50.
+
+  ```bash
+  pip install -r requirements-agent.txt
+  ANTHROPIC_API_KEY=... python -m agents.testing_agent --base origin/main --pr 25 --out test-results/agent
+  ```
