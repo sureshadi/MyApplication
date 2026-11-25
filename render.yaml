@@ -19,3 +19,7 @@ services:
         sync: false # "Your Name you@example.com": SEC EDGAR asks automated clients to identify themselves
       - key: ANTHROPIC_API_KEY
         sync: false # optional: Claude-written drivers, guidance and risks in the market research
+      - key: PORTFOLIO_USER
+        sync: false # username for the Portfolio sign-in
+      - key: PORTFOLIO_PASSWORD
+        sync: false # password for the Portfolio sign-in; Portfolio stays locked until this is set

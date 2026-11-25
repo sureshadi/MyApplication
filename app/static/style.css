@@ -551,6 +551,35 @@ h2 { font-size: 1.3rem; letter-spacing: -.02em; margin: 28px 0 0; }
 }
 .error-card p { color: var(--muted); }
 
+/* ---------- Portfolio sign-in ---------- */
+.login-card {
+  max-width: 400px; margin: 40px auto; padding: 32px 28px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 18px; box-shadow: var(--shadow);
+}
+.login-icon { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 12px; background: var(--gradient); color: #fff; margin-bottom: 14px; }
+.login-card h1 { font-size: 1.6rem; }
+.login-form { display: grid; gap: 6px; margin-top: 20px; }
+.login-form label { font-size: .85rem; font-weight: 600; margin-top: 8px; }
+.login-form input {
+  padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border-strong);
+  background: var(--surface-solid); color: var(--fg); font: inherit;
+}
+.login-form input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
+.login-form .button { margin-top: 16px; width: 100%; }
+.login-error {
+  margin: 16px 0 0; padding: 10px 12px; border-radius: 10px; color: var(--down); background: var(--down-bg);
+  border: 1px solid color-mix(in srgb, var(--down) 40%, transparent); font-size: .9rem; font-weight: 500;
+}
+.portfolio-title { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+.portfolio-title h1 { margin: 0; }
+.logout-form { margin: 0; }
+.logout-btn {
+  padding: 7px 12px; border-radius: 10px; border: 1px solid var(--border-strong); background: var(--surface-solid);
+  color: var(--muted); font: inherit; font-size: .85rem; font-weight: 600; cursor: pointer;
+}
+.logout-btn:hover { color: var(--fg); border-color: var(--accent); }
+@media (max-width: 640px) { .login-card { margin: 16px auto; padding: 24px 18px; } }
+
 .site-footer { text-align: center; color: var(--muted); font-size: .8rem; padding: 32px 16px; }
 
 @media (max-width: 640px) {

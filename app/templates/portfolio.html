@@ -4,7 +4,12 @@
 <section class="portfolio" data-testid="portfolio" data-default="{{ watchlist|join(',') }}">
   <div class="page-head portfolio-head">
     <div>
-      <h1>Portfolio</h1>
+      <div class="portfolio-title">
+        <h1>Portfolio</h1>
+        <form class="logout-form" method="post" action="/logout">
+          <button type="submit" class="logout-btn" data-testid="logout">Sign out</button>
+        </form>
+      </div>
       <p class="subtitle"><span data-testid="portfolio-count">{{ watchlist|length }}</span> tickers. Badges show the price change over <b data-testid="period-name">1 day</b>. Click a ticker for its top news. Changes are saved in this browser.</p>
     </div>
     <div class="period-picker" data-testid="period-picker">

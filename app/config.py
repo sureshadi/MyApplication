@@ -101,6 +101,13 @@ class Settings:
     performance_ttl_seconds: int = field(default_factory=lambda: int(os.getenv("PERFORMANCE_TTL_SECONDS", "3600")))
     # Headlines shown in the side panel when a ticker is clicked on Portfolio.
     panel_news_items: int = 3
+    # Portfolio sign-in. Set these in the host's environment settings; never commit the password.
+    # With no password set, Portfolio stays locked.
+    portfolio_user: str | None = field(default_factory=lambda: os.getenv("PORTFOLIO_USER") or None)
+    portfolio_password: str | None = field(default_factory=lambda: os.getenv("PORTFOLIO_PASSWORD") or None)
+    # Optional: signs the session cookie. Defaults to a key derived from the credentials.
+    session_secret: str | None = field(default_factory=lambda: os.getenv("SESSION_SECRET") or None)
+    session_days: int = field(default_factory=lambda: int(os.getenv("SESSION_DAYS", "30")))
 
 
 def get_settings() -> Settings:
