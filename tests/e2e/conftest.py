@@ -1,4 +1,13 @@
-"""Start the real app on a local port (with outside HTTP mocked) for browser tests."""
+"""Browser test setup.
+
+By default the tests start the real app on a local port, with outside HTTP mocked.
+Set BASE_URL to run against a deployed site instead, e.g.
+
+    BASE_URL=https://market-headlines.onrender.com PORTFOLIO_USER=... PORTFOLIO_PASSWORD=... pytest -m e2e
+
+Against a deployed site only tests marked `remote_safe` run (the sign-in tests): the rest rely on mocked
+news and prices. Credentials then come from PORTFOLIO_USER and PORTFOLIO_PASSWORD.
+"""
 
 from __future__ import annotations
 
@@ -7,13 +16,66 @@ import socket
 import threading
 import time
 
+import httpx
 import pytest
 import respx
 import uvicorn
+from playwright.sync_api import expect
 
 from app import auth
 from app.main import create_app
 from tests.conftest import TEST_PASSWORD, TEST_USER, install_default_routes, make_settings
+
+
+BASE_URL = os.getenv("BASE_URL", "").strip().rstrip("/")
+REMOTE = bool(BASE_URL)
+
+if REMOTE:
+    # A deployed site is slower than a local one (and Render's free plan wakes up from sleep).
+    expect.set_options(timeout=20_000)
+
+
+def pytest_collection_modifyitems(config, items):
+    if not REMOTE:
+        return
+    skip = pytest.mark.skip(reason=f"needs the local test server with mocked data (BASE_URL={BASE_URL})")
+    for item in items:
+        if "e2e" in item.keywords and "remote_safe" not in item.keywords:
+            item.add_marker(skip)
+
+
+@pytest.fixture(scope="session")
+def credentials() -> tuple[str, str]:
+    """Portfolio username and password: test-only ones locally, the real ones from the environment remotely."""
+    if not REMOTE:
+        return TEST_USER, TEST_PASSWORD
+    user, password = os.getenv("PORTFOLIO_USER"), os.getenv("PORTFOLIO_PASSWORD")
+    if not user or not password:
+        pytest.exit("Set PORTFOLIO_USER and PORTFOLIO_PASSWORD to run the browser tests against BASE_URL", returncode=4)
+    return user, password
+
+
+def remote_sign_in(base_url: str, user: str, password: str) -> str:
+    """Sign in over HTTP and return the session cookie. A successful sign-in also clears failed attempts."""
+    r = httpx.post(f"{base_url}/login", data={"username": user, "password": password}, timeout=90)
+    token = r.cookies.get(auth.COOKIE_NAME)
+    if r.status_code != 303 or not token:
+        pytest.exit(f"Could not sign in to {base_url} (HTTP {r.status_code}). Check PORTFOLIO_USER/PORTFOLIO_PASSWORD.", returncode=4)
+    return token
+
+
+def _wake_up(base_url: str) -> None:
+    """Render's free plan sleeps when idle; the first request can take up to a minute."""
+    deadline = time.time() + 180
+    while True:
+        try:
+            if httpx.get(f"{base_url}/healthz", timeout=90).status_code == 200:
+                return
+        except httpx.HTTPError:
+            pass
+        if time.time() > deadline:
+            pytest.exit(f"{base_url} did not respond", returncode=4)
+        time.sleep(5)
 
 
 def _free_port() -> int:
@@ -24,12 +86,20 @@ def _free_port() -> int:
 
 @pytest.fixture(scope="session")
 def live_app():
-    """The app the browser tests talk to (lets tests reach its state, e.g. the sign-in throttle)."""
+    """The local app the browser tests talk to (lets tests reach its state, e.g. the sign-in throttle)."""
+    if REMOTE:
+        pytest.skip("needs the local test server")
     return create_app(make_settings(), analyst_factory=None)
 
 
 @pytest.fixture(scope="session")
-def live_server(live_app):
+def live_server(request):
+    """Base URL of the site under test: BASE_URL if set, otherwise a local server started here."""
+    if REMOTE:
+        _wake_up(BASE_URL)
+        yield BASE_URL
+        return
+    live_app = request.getfixturevalue("live_app")
     port = _free_port()
     # Let requests to the local server itself through; everything else is mocked.
     with respx.mock(assert_all_called=False) as router:
@@ -56,9 +126,12 @@ def browser_type_launch_args(browser_type_launch_args):
 
 
 @pytest.fixture(scope="session")
-def browser_context_args(browser_context_args, live_server):
+def browser_context_args(browser_context_args, live_server, credentials):
     """Browser tests start signed in to Portfolio. Sign-in itself is tested with a fresh context (anon_page)."""
-    token = auth.Authenticator(TEST_USER, TEST_PASSWORD, None, 86400).make_token()
+    if REMOTE:
+        token = remote_sign_in(live_server, *credentials)
+    else:
+        token = auth.Authenticator(TEST_USER, TEST_PASSWORD, None, 86400).make_token()
     cookie = {"name": auth.COOKIE_NAME, "value": token, "url": live_server, "httpOnly": True, "sameSite": "Lax"}
     return {**browser_context_args, "storage_state": {"cookies": [cookie], "origins": []}}
 
@@ -67,5 +140,7 @@ def browser_context_args(browser_context_args, live_server):
 def anon_page(browser, live_server):
     """A page in a browser that hasn't signed in."""
     context = browser.new_context()
+    if REMOTE:
+        context.set_default_navigation_timeout(90_000)
     yield context.new_page()
     context.close()
