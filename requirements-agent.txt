@@ -1,0 +1,3 @@
+# Extra packages for the testing agent (agents/testing_agent.py), installed only by .github/workflows/testing-agent.yml.
+-r requirements-dev.txt
+claude-agent-sdk>=0.2.189,<0.3
