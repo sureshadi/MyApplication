@@ -29,6 +29,18 @@ HEALTH_URL = "https://feeds.test/health.xml"
 TICKER_NEWS_URL = "https://feeds.test/ticker/{symbol}.xml"
 
 
+# Test-only Portfolio credentials (the real ones live in the host's environment settings).
+TEST_USER = "tester"
+TEST_PASSWORD = "test-password-123"
+
+
+def sign_in(c: TestClient) -> TestClient:
+    """Sign a test client in to Portfolio."""
+    r = c.post("/login", data={"username": TEST_USER, "password": TEST_PASSWORD}, follow_redirects=False)
+    assert r.status_code == 303, r.text
+    return c
+
+
 def fixture_bytes(name: str) -> bytes:
     return (FIXTURES / name).read_bytes()
 
@@ -48,6 +60,9 @@ def make_settings(**overrides) -> Settings:
         finnhub_api_key=None,
         cache_ttl_seconds=60,
         http_timeout_seconds=2,
+        portfolio_user=TEST_USER,
+        portfolio_password=TEST_PASSWORD,
+        session_secret=None,
     )
     values.update(overrides)
     return Settings(**values)
@@ -194,5 +209,13 @@ def mock_http():
 
 @pytest.fixture
 def client(mock_http):
+    """A visitor who has signed in to Portfolio."""
+    with TestClient(create_app(make_settings(), analyst_factory=None)) as c:
+        yield sign_in(c)
+
+
+@pytest.fixture
+def anon_client(mock_http):
+    """A visitor who hasn't signed in."""
     with TestClient(create_app(make_settings(), analyst_factory=None)) as c:
         yield c

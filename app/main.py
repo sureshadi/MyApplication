@@ -7,14 +7,15 @@ import hashlib
 from pathlib import Path
 
 import asyncio
+from urllib.parse import parse_qs
 
 import httpx
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import news, research, stocks, suggest
+from . import auth, news, research, stocks, suggest
 from .cache import TTLCache
 from .config import Feed, Settings, Topic, get_settings
 
@@ -57,6 +58,28 @@ def create_app(settings: Settings | None = None, analyst_factory=research.defaul
     templates.env.globals["asset_url"] = asset_url
     templates.env.globals["watchlist"] = list(settings.watchlist)
     templates.env.globals["topics"] = [{"slug": t.slug, "title": t.title} for t in settings.topics]
+
+    authenticator = auth.Authenticator(
+        settings.portfolio_user, settings.portfolio_password, settings.session_secret, settings.session_days * 86400
+    )
+    throttle = auth.LoginThrottle()
+    app.state.auth = authenticator
+
+    def signed_in(request: Request) -> bool:
+        return authenticator.valid_token(request.cookies.get(auth.COOKIE_NAME))
+
+    @app.middleware("http")
+    async def require_login(request: Request, call_next):
+        """Portfolio and the APIs only it uses need a signed-in session; everything else is public."""
+        if auth.is_protected(request.url.path) and not signed_in(request):
+            if request.url.path.startswith("/api/"):
+                return JSONResponse({"detail": "Sign in to see your portfolio"}, status_code=401)
+            target = request.url.path + (f"?{request.url.query}" if request.url.query else "")
+            return RedirectResponse(url=auth.login_url(target), status_code=303)
+        response = await call_next(request)
+        if auth.is_protected(request.url.path):
+            response.headers["Cache-Control"] = "private, no-store"
+        return response
 
     async def all_news(request: Request) -> list[news.NewsItem]:
         """Every headline from every front-page feed, de-duplicated and newest first (cached)."""
@@ -204,6 +227,60 @@ def create_app(settings: Settings | None = None, analyst_factory=research.defaul
     @app.get("/portfolio", response_class=HTMLResponse)
     async def portfolio_page(request: Request):
         return templates.TemplateResponse(request, "portfolio.html", {"active_tab": "portfolio"})
+
+    def login_page(request: Request, next_path: str, error: str | None = None, status: int = 200, user: str = ""):
+        return templates.TemplateResponse(
+            request,
+            "login.html",
+            {
+                "active_tab": "portfolio",
+                "next": next_path,
+                "error": error,
+                "user": user,
+                "configured": authenticator.configured,
+            },
+            status_code=status,
+            headers={"Cache-Control": "no-store"},
+        )
+
+    @app.get("/login", response_class=HTMLResponse)
+    async def login_form(request: Request, next: str | None = None):
+        next_path = auth.safe_next(next)
+        if signed_in(request):
+            return RedirectResponse(url=next_path, status_code=303)
+        return login_page(request, next_path)
+
+    @app.post("/login", response_class=HTMLResponse)
+    async def login_submit(request: Request):
+        form = parse_qs((await request.body()).decode("utf-8", "replace"), keep_blank_values=True)
+        user = (form.get("username") or [""])[0][:100]
+        password = (form.get("password") or [""])[0][:200]
+        next_path = auth.safe_next((form.get("next") or [None])[0])
+        client_key = request.client.host if request.client else "unknown"
+        if not authenticator.configured:
+            return login_page(request, next_path, "Portfolio sign-in isn't set up on this server yet.", 503, user)
+        if throttle.blocked(client_key):
+            return login_page(request, next_path, "Too many attempts. Wait 15 minutes and try again.", 429, user)
+        if not authenticator.check_credentials(user, password):
+            throttle.fail(client_key)
+            return login_page(request, next_path, "Wrong username or password.", 401, user)
+        throttle.reset(client_key)
+        response = RedirectResponse(url=next_path, status_code=303)
+        response.set_cookie(
+            auth.COOKIE_NAME,
+            authenticator.make_token(),
+            max_age=authenticator.max_age_seconds,
+            httponly=True,
+            samesite="lax",
+            secure=request.url.scheme == "https",
+        )
+        return response
+
+    @app.post("/logout")
+    async def logout():
+        response = RedirectResponse(url="/", status_code=303)
+        response.delete_cookie(auth.COOKIE_NAME)
+        return response
 
     @app.get("/news/{slug}", response_class=HTMLResponse)
     async def topic_page(request: Request, slug: str, source: str | None = None):

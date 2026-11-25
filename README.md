@@ -43,11 +43,19 @@ Open http://127.0.0.1:8000.
 | `HTTP_TIMEOUT_SECONDS` | `10` | Timeout for each outside request. |
 | `SEC_USER_AGENT` | generic | SEC EDGAR asks automated clients to identify themselves, e.g. `Your Name you@example.com`. Set this in production. |
 | `ANTHROPIC_API_KEY` | unset | Optional. Turns on Claude-written drivers, guidance and risks in the market research (model `claude-opus-5-5`). |
+| `PORTFOLIO_USER` | unset | Username for the Portfolio sign-in (not case sensitive). |
+| `PORTFOLIO_PASSWORD` | unset | Password for the Portfolio sign-in. Until both are set, Portfolio stays locked. Never commit it. |
+| `SESSION_SECRET` | derived | Optional key that signs the sign-in cookie. By default it is derived from the credentials, so changing the password signs everyone out. |
+| `SESSION_DAYS` | `30` | How long a sign-in lasts. |
 | `RESEARCH_MODEL` | `claude-opus-5-5` | Claude model for the market research. |
 | `RESEARCH_TTL_SECONDS` | `21600` | How long each company's analysis is cached (6 hours). |
 | `PERFORMANCE_TTL_SECONDS` | `3600` | How long each ticker's 1M to 5Y price changes are cached (1 hour). |
 
 News feeds are listed in `app/config.py`.
+
+## Portfolio sign-in
+
+`/portfolio` and the APIs only it uses (`/api/performance`, `/api/research/{symbol}`, `/api/ticker/{symbol}/news`) need a signed-in session. Unsigned visitors are sent to `/login` (pages) or get `401` (APIs). The news tabs, ticker pages and the top ticker bar stay public. After 5 wrong passwords from one address, sign-in waits 15 minutes.
 
 ## Endpoints
 

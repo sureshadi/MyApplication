@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from app import research
 from app.main import create_app
-from tests.conftest import make_settings
+from tests.conftest import make_settings, sign_in
 
 
 def test_research_returns_risks_first_then_fundamentals(client):
@@ -54,7 +54,7 @@ def test_sec_ticker_list_is_fetched_once_for_many_companies(client, mock_http):
 def test_research_when_sec_is_down_is_503(mock_http):
     mock_http.get(research.SEC_TICKERS_URL).mock(side_effect=httpx.ConnectError("down"))
     with TestClient(create_app(make_settings(), analyst_factory=None)) as c:
-        r = c.get("/api/research/AAPL")
+        r = sign_in(c).get("/api/research/AAPL")
     assert r.status_code == 503
 
 
@@ -67,7 +67,7 @@ def test_research_uses_claude_analyst_when_configured(mock_http):
             {"title": "Competition", "detail": "Headlines show price cuts.", "severity": "medium"}]}
 
     with TestClient(create_app(make_settings(), analyst_factory=lambda: analyst)) as c:
-        data = c.get("/api/research/AAPL").json()
+        data = sign_in(c).get("/api/research/AAPL").json()
     assert data["analyst"] == "claude" and data["headline"] == "AI headline."
     assert "Competition" in [r["title"] for r in data["risks"]]
     # Claude gets the company's recent headlines and last month's price move.

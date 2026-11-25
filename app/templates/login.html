@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Sign in · Market Headlines{% endblock %}
+{% block content %}
+<section class="login-card" data-testid="login">
+  <span class="login-icon" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width="22" height="22"><rect x="5" y="11" width="14" height="10" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+  </span>
+  <h1>Sign in to Portfolio</h1>
+  <p class="subtitle">Your portfolio is private. News tabs stay open to everyone.</p>
+  {% if error %}<p class="login-error" role="alert" data-testid="login-error">{{ error }}</p>
+  {% elif not configured %}<p class="login-error" role="alert" data-testid="login-error">Portfolio sign-in isn't set up on this server yet.</p>{% endif %}
+  <form class="login-form" method="post" action="/login" data-testid="login-form">
+    <input type="hidden" name="next" value="{{ next }}">
+    <label for="login-username">Username</label>
+    <input id="login-username" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false"
+           required maxlength="100" value="{{ user }}" {% if not user %}autofocus{% endif %} data-testid="login-username">
+    <label for="login-password">Password</label>
+    <input id="login-password" name="password" type="password" autocomplete="current-password" required maxlength="200"
+           {% if user %}autofocus{% endif %} data-testid="login-password">
+    <button type="submit" class="button" data-testid="login-submit">Sign in</button>
+  </form>
+</section>
+{% endblock %}

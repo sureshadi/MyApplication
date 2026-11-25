@@ -11,8 +11,9 @@ import pytest
 import respx
 import uvicorn
 
+from app import auth
 from app.main import create_app
-from tests.conftest import install_default_routes, make_settings
+from tests.conftest import TEST_PASSWORD, TEST_USER, install_default_routes, make_settings
 
 
 def _free_port() -> int:
@@ -46,3 +47,19 @@ def browser_type_launch_args(browser_type_launch_args):
     # Allow pointing at a preinstalled Chromium (e.g. in containers) via env var.
     path = os.getenv("PLAYWRIGHT_CHROMIUM_EXECUTABLE")
     return {**browser_type_launch_args, **({"executable_path": path} if path else {})}
+
+
+@pytest.fixture(scope="session")
+def browser_context_args(browser_context_args, live_server):
+    """Browser tests start signed in to Portfolio. Sign-in itself is tested with a fresh context (anon_page)."""
+    token = auth.Authenticator(TEST_USER, TEST_PASSWORD, None, 86400).make_token()
+    cookie = {"name": auth.COOKIE_NAME, "value": token, "url": live_server, "httpOnly": True, "sameSite": "Lax"}
+    return {**browser_context_args, "storage_state": {"cookies": [cookie], "origins": []}}
+
+
+@pytest.fixture
+def anon_page(browser, live_server):
+    """A page in a browser that hasn't signed in."""
+    context = browser.new_context()
+    yield context.new_page()
+    context.close()

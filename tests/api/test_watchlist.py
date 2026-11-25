@@ -3,7 +3,7 @@
 from fastapi.testclient import TestClient
 
 from app.main import create_app
-from tests.conftest import generated_price, make_settings
+from tests.conftest import generated_price, make_settings, sign_in
 
 DEFAULT = ["AAPL", "META", "NVDA", "AMAT", "AVGO", "LLY", "GOOGL", "MSFT"]
 
@@ -74,7 +74,7 @@ class TestPortfolioMarkup:
 
     def test_watchlist_is_configurable(self, mock_http):
         with TestClient(create_app(make_settings(watchlist=("TSLA", "AMD")))) as c:
-            html = c.get("/portfolio").text
+            html = sign_in(c).get("/portfolio").text
             assert html.count('data-testid="ticker-chip"') == 2
             assert [q["symbol"] for q in c.get("/api/quotes").json()["quotes"]] == ["TSLA", "AMD"]
 
