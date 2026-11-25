@@ -1,0 +1,20 @@
+# Code coverage settings, used by pytest-cov (pytest --cov) and by `coverage combine/report/html`.
+# The browser tests start the app in a thread of the pytest process (tests/e2e/conftest.py), so their
+# server-side coverage is measured the same way as the unit and API tests'.
+# Each run writes its own data file (.coverage.unit-api, .coverage.e2e) and `coverage combine` merges them.
+[run]
+source = app
+branch = true
+relative_files = true
+
+[report]
+show_missing = true
+skip_empty = true
+precision = 1
+
+[html]
+directory = coverage-report/html
+title = MyApplication combined coverage (unit + API + browser)
+
+[xml]
+output = coverage-report/coverage.xml
