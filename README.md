@@ -84,7 +84,7 @@ python -m playwright install chromium
 pytest -m e2e          # browser tests against a live local server
 pytest -m e2e tests/e2e/test_login.py --headed   # watch the sign-in tests in a browser
 
-# the sign-in tests against the live site (other browser tests are skipped: they need mocked data)
+# the browser tests against the live site (checks layout and behaviour; exact mocked-data checks are skipped)
 BASE_URL=https://market-headlines.onrender.com PORTFOLIO_USER=... PORTFOLIO_PASSWORD=... pytest -m e2e -rs
 ```
 
@@ -96,7 +96,7 @@ BASE_URL=https://market-headlines.onrender.com PORTFOLIO_USER=... PORTFOLIO_PASS
 
 ## CI
 
-**Live site tests** (`.github/workflows/live-site-tests.yml`): run by hand from Actions → Live site tests → Run workflow. It runs the sign-in tests against a deployed URL (default https://market-headlines.onrender.com) using the `PORTFOLIO_USER` and `PORTFOLIO_PASSWORD` repository secrets. The lockout test is skipped there so it can't lock you out, and each test ends with a correct sign-in, which clears any wrong attempts.
+**Live site tests** (`.github/workflows/live-site-tests.yml`): run by hand from Actions → Live site tests → Run workflow. It runs the browser tests against a deployed URL (default https://market-headlines.onrender.com) using the `PORTFOLIO_USER` and `PORTFOLIO_PASSWORD` repository secrets. The lockout test is skipped there so it can't lock you out, and each test ends with a correct sign-in, which clears any wrong attempts. Against a deployed site the tests check layout and behaviour (pages render, tabs switch, the period picker changes values, dark mode toggles) instead of exact headlines and prices; tests marked `local_only` check the mocked data exactly and only run locally. Portfolio tickers are kept in each browser's localStorage and every test uses a fresh browser, so the tests never change your real portfolio.
 
 - **GitHub Actions:** `.github/workflows/tests.yml` runs unit/API tests and then browser tests on every push and pull request, and uploads JUnit results.
 - **Jenkins:** `Jenkinsfile` runs the same stages inside the official Playwright Python Docker image and publishes JUnit results.
