@@ -1,0 +1,37 @@
+name: Live site tests
+
+# Runs the Playwright sign-in tests against a deployed site (Actions → Live site tests → Run workflow).
+# Needs repository secrets PORTFOLIO_USER and PORTFOLIO_PASSWORD (Settings → Secrets and variables → Actions).
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: Site to test
+        default: https://market-headlines.onrender.com
+        required: true
+
+jobs:
+  live:
+    name: Sign-in tests against ${{ inputs.base_url }}
+    runs-on: ubuntu-latest
+    # One run at a time, so two runs can't add up wrong-password attempts on the live site.
+    concurrency: live-site-tests
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - run: python -m playwright install --with-deps chromium
+      - run: pytest -m e2e -v -rs --junitxml=test-results/live.xml --screenshot only-on-failure --output test-results/playwright
+        env:
+          BASE_URL: ${{ inputs.base_url }}
+          PORTFOLIO_USER: ${{ secrets.PORTFOLIO_USER }}
+          PORTFOLIO_PASSWORD: ${{ secrets.PORTFOLIO_PASSWORD }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-site-results
+          path: test-results/

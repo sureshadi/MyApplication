@@ -83,6 +83,9 @@ pytest                 # unit + API tests
 python -m playwright install chromium
 pytest -m e2e          # browser tests against a live local server
 pytest -m e2e tests/e2e/test_login.py --headed   # watch the sign-in tests in a browser
+
+# the sign-in tests against the live site (other browser tests are skipped: they need mocked data)
+BASE_URL=https://market-headlines.onrender.com PORTFOLIO_USER=... PORTFOLIO_PASSWORD=... pytest -m e2e -rs
 ```
 
 | Folder | What it covers |
@@ -92,6 +95,8 @@ pytest -m e2e tests/e2e/test_login.py --headed   # watch the sign-in tests in a 
 | `tests/e2e` | Playwright: front page, ticker search, ticker bar (prices, add, remove, saved after reload, errors), not-found and invalid input, mobile layout, dark mode (system default, toggle, saved after reload), ticker news side panel, market research tabs (one tab per company with a risk dot, arrow keys, risks first, key number tiles, "Show" for all fundamentals, add/remove, phone layout), period picker (badges, research comparisons, saved choice, arrow keys, phone fit), Portfolio sign-in (`test_login.py`, with a `LoginPage` page object in `tests/e2e/pages/`: correct sign-in, wrong username or password, empty fields, redirects, sign out, lockout after 5 wrong tries, staying signed in, phone and dark mode) |
 
 ## CI
+
+**Live site tests** (`.github/workflows/live-site-tests.yml`): run by hand from Actions → Live site tests → Run workflow. It runs the sign-in tests against a deployed URL (default https://market-headlines.onrender.com) using the `PORTFOLIO_USER` and `PORTFOLIO_PASSWORD` repository secrets. The lockout test is skipped there so it can't lock you out, and each test ends with a correct sign-in, which clears any wrong attempts.
 
 - **GitHub Actions:** `.github/workflows/tests.yml` runs unit/API tests and then browser tests on every push and pull request, and uploads JUnit results.
 - **Jenkins:** `Jenkinsfile` runs the same stages inside the official Playwright Python Docker image and publishes JUnit results.
