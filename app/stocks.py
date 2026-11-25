@@ -174,8 +174,10 @@ async def get_quote(client: httpx.AsyncClient, symbol: str, finnhub_api_key: str
         raise QuoteUnavailable(str(exc)) from exc
 
 
-# Price change over each period the Portfolio page offers. Months back from the latest close.
+# Price change over each period the Portfolio page offers. Months back from the latest close
+# (1D is the change from the previous close).
 PERIOD_MONTHS = {"1M": 1, "3M": 3, "6M": 6, "1Y": 12, "2Y": 24, "5Y": 60}
+PERIODS = ("1D", *PERIOD_MONTHS)
 
 
 def _months_before(day: datetime, months: int) -> datetime:
@@ -197,9 +199,10 @@ def parse_performance(data: dict) -> dict[str, float | None]:
     points = [(t, c) for t, c in zip(result.get("timestamp") or [], closes) if c is not None]
     price = (result.get("meta") or {}).get("regularMarketPrice") or (points[-1][1] if points else None)
     if not points or not price:
-        return {k: None for k in PERIOD_MONTHS}
+        return {k: None for k in PERIODS}
     latest = datetime.fromtimestamp(points[-1][0], tz=timezone.utc)
-    out: dict[str, float | None] = {}
+    prev = points[-2][1] if len(points) >= 2 else None
+    out: dict[str, float | None] = {"1D": round((price - prev) / prev * 100, 2) if prev else None}
     for key, months in PERIOD_MONTHS.items():
         start = _months_before(latest, months).timestamp()
         base = None
@@ -215,8 +218,14 @@ def parse_performance(data: dict) -> dict[str, float | None]:
     return out
 
 
-async def get_performance(client: httpx.AsyncClient, symbol: str) -> dict[str, float | None]:
-    """Price change over 1M, 3M, 6M, 1Y, 2Y and 5Y from Yahoo Finance's daily history."""
+def chart_price(data: dict) -> float | None:
+    result = ((data.get("chart") or {}).get("result") or [{}])[0]
+    return (result.get("meta") or {}).get("regularMarketPrice")
+
+
+async def get_performance(client: httpx.AsyncClient, symbol: str) -> dict:
+    """Latest price and its change over 1D, 1M, 3M, 6M, 1Y, 2Y and 5Y from Yahoo Finance's daily history:
+    {"price": 232.5, "changes": {"1D": 1.09, "1M": ..., ...}}."""
     try:
         resp = await client.get(
             YAHOO_CHART_URL.format(symbol=symbol),
@@ -226,6 +235,7 @@ async def get_performance(client: httpx.AsyncClient, symbol: str) -> dict[str, f
         if resp.status_code == 404:
             raise QuoteNotFound(symbol)
         resp.raise_for_status()
-        return parse_performance(resp.json())
+        data = resp.json()
+        return {"price": chart_price(data), "changes": parse_performance(data)}
     except httpx.HTTPError as exc:
         raise QuoteUnavailable(str(exc)) from exc

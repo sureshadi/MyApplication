@@ -195,10 +195,10 @@ function attachSuggestions(input, list, onPick) {
   var PERIODS = periodBtns.map(function (b) { return b.dataset.period; });
   var period = (function () {
     try { var p = window.localStorage.getItem(PERIOD_KEY); if (PERIODS.indexOf(p) !== -1) return p; } catch (e) { /* ignore */ }
-    return "1Y";
+    return "1D";
   })();
   var quotes = {};       // symbol -> latest quote
-  var performance = {};  // symbol -> {1M: pct, ...}, or null when unavailable
+  var performance = {};  // symbol -> {price, changes: {1D: pct, 1M: pct, ...}}, or null when unavailable
 
   function chip(symbol) {
     var el = document.createElement("div");
@@ -253,29 +253,39 @@ function attachSuggestions(input, list, onPick) {
     var px = el.querySelector(".px");
     var name = el.querySelector(".name");
     if (name && q.name) name.textContent = q.name;
-    px.textContent = q.error ? "" : fmt(q.price);
+    paintPrice(q.symbol);
     paintBadge(q.symbol);
   }
 
-  // The badge shows the price change over the chosen period.
+  // Current price from the quote, or from the price history if the quote failed.
+  function paintPrice(symbol) {
+    var el = chipsEl.querySelector('[data-symbol="' + symbol + '"]');
+    if (!el) return;
+    var q = quotes[symbol], p = performance[symbol];
+    var price = q && !q.error ? q.price : p && p.price != null ? p.price : null;
+    el.querySelector(".px").textContent = price == null ? "" : fmt(price);
+  }
+
+  // The badge shows the price change over the chosen period; 1D is today's change.
   function paintBadge(symbol) {
     var el = chipsEl.querySelector('[data-symbol="' + symbol + '"]');
     if (!el) return;
     var chg = el.querySelector(".chg"), q = quotes[symbol];
     var label = periodLabel(period);
-    if ((q && q.error) || performance[symbol] === null) {
-      chg.textContent = "n/a"; chg.className = "chg na"; chg.title = "No price history";
+    var p = performance[symbol];
+    var pct = period === "1D" && q && !q.error ? q.change_percent : p && p.changes ? p.changes[period] : undefined;
+    if (pct === undefined) {
+      if ((q && q.error && p !== undefined) || p === null) { chg.textContent = "n/a"; chg.className = "chg na"; chg.title = "No price data"; }
+      else { chg.textContent = ""; chg.className = "chg"; }
       return;
     }
-    if (!performance[symbol]) { chg.textContent = ""; chg.className = "chg"; return; }
-    var pct = performance[symbol][period];
     if (pct == null) {
       chg.textContent = "–"; chg.className = "chg na"; chg.title = "No price history for " + label;
       return;
     }
     chg.textContent = (pct > 0 ? "+" : "") + pct.toFixed(2) + "%";
     chg.className = "chg " + (pct > 0 ? "up" : pct < 0 ? "down" : "flat");
-    chg.title = "Price change over " + label;
+    chg.title = period === "1D" ? "Change today" : "Price change over " + label;
   }
 
   function periodLabel(p) {
@@ -288,7 +298,11 @@ function attachSuggestions(input, list, onPick) {
     return fetch("/api/performance?symbols=" + encodeURIComponent(symbols.join(",")))
       .then(function (r) { return r.ok ? r.json() : { performance: [] }; })
       .then(function (data) {
-        data.performance.forEach(function (p) { performance[p.symbol] = p.error ? null : p.changes; paintBadge(p.symbol); });
+        data.performance.forEach(function (p) {
+          performance[p.symbol] = p.error ? null : { price: p.price, changes: p.changes };
+          paintPrice(p.symbol);
+          paintBadge(p.symbol);
+        });
       })
       .catch(function () { /* badges stay empty; the next refresh tries again */ });
   }
@@ -491,7 +505,7 @@ function attachSuggestions(input, list, onPick) {
   }
 
   function comparisonOf(a) {
-    return a.comparison || { key: "1Y", label: "Prior year", phrase: "year over year", price_window: "1 year" };
+    return a.comparison || { key: "1D", label: "Prior year", phrase: "year over year", earlier: "a year earlier", price_window: "1 day" };
   }
 
   function changeText(m) {
@@ -692,7 +706,7 @@ function attachSuggestions(input, list, onPick) {
     var compare = el("p", "rp-compare",
       (c.key === "1M" ? "Companies report every quarter, so for 1 month the fundamentals compare with the prior quarter. " :
         "Fundamentals compare the latest period with the same period " + (c.earlier || "a year earlier") + ". ") +
-      "The share price uses " + c.price_window + ".");
+      (c.key === "1D" ? "The share price uses today's change." : "The share price uses " + c.price_window + "."));
     compare.setAttribute("data-testid", "research-compare");
     var parts = [panelHead(selected, a.name, riskLevel(a)), headline, meta, compare, riskList(a)];
     if (a.metrics.length) parts.push(kpiTiles(a));

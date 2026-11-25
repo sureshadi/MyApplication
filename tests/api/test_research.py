@@ -72,7 +72,7 @@ def test_research_uses_claude_analyst_when_configured(mock_http):
     assert "Competition" in [r["title"] for r in data["risks"]]
     # Claude gets the company's recent headlines and last month's price move.
     assert seen[0]["recent_headlines"][0]["title"] == "Apple unveils new AI features for iPhone"
-    assert seen[0]["price_change_pct"] is not None and seen[0]["price_change_window"] == "1 year"
+    assert seen[0]["price_change_pct"] is not None and seen[0]["price_change_window"] == "1 day"
 
 
 def test_ticker_news_returns_top_3_newest_first(client):
@@ -119,24 +119,27 @@ def test_research_period_sets_the_comparison(client):
     assert data["comparison"]["label"] == "Prior quarter"
     assert data["metrics"][0]["prior"] == 96.9e9
     assert "quarter over quarter" in data["headline"]
-    assert client.get("/api/research/AAPL").json()["comparison"]["key"] == "1Y"
+    # The default is 1D: today's price move, figures compared with a year earlier.
+    default = client.get("/api/research/AAPL").json()["comparison"]
+    assert default["key"] == "1D" and default["label"] == "Prior year"
 
 
 def test_research_rejects_an_unknown_period(client):
     r = client.get("/api/research/AAPL?period=10Y")
-    assert r.status_code == 400 and "1M, 3M, 6M, 1Y, 2Y, 5Y" in r.json()["detail"]
+    assert r.status_code == 400 and "1D, 1M, 3M, 6M, 1Y, 2Y, 5Y" in r.json()["detail"]
 
 
 def test_performance_lists_every_period(client):
     r = client.get("/api/performance?symbols=AAPL,LOSS,NOPE1")
     assert r.status_code == 200
     data = r.json()
-    assert data["periods"] == ["1M", "3M", "6M", "1Y", "2Y", "5Y"]
+    assert data["periods"] == ["1D", "1M", "3M", "6M", "1Y", "2Y", "5Y"]
     by_symbol = {p["symbol"]: p for p in data["performance"]}
     assert set(by_symbol["AAPL"]["changes"]) == set(data["periods"])
     assert all(v > 0 for v in by_symbol["AAPL"]["changes"].values())
     assert all(v < 0 for v in by_symbol["LOSS"]["changes"].values())
-    assert by_symbol["NOPE1"] == {"symbol": "NOPE1", "changes": None, "error": "not_found"}
+    assert by_symbol["AAPL"]["price"] == 232.5
+    assert by_symbol["NOPE1"] == {"symbol": "NOPE1", "price": None, "changes": None, "error": "not_found"}
 
 
 def test_performance_rejects_bad_symbols(client):

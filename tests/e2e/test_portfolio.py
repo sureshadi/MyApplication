@@ -49,8 +49,8 @@ def test_clicking_my_portfolio_shows_every_ticker(page: Page, live_server, width
 def test_portfolio_shows_live_prices(page: Page, live_server):
     open_portfolio(page, live_server)
     expect(chip(page, "AAPL").locator(".px")).to_have_text("232.50")
-    # The badge is the price change over the chosen period (1 year by default).
-    expect(chip(page, "AAPL").locator(".chg")).to_have_text(re.compile(r"^\+\d+\.\d\d%$"))
+    # By default the badge is today's change (1D on the period picker).
+    expect(chip(page, "AAPL").locator(".chg")).to_have_text("+1.09%")
     expect(chip(page, "AAPL").locator(".chg")).to_have_class(re.compile(r"\bup\b"))
     expect(chip(page, "NVDA").locator(".px")).to_have_text(f"{generated_price('NVDA'):,.2f}")
     expect(chip(page, "NVDA").locator(".name")).to_have_text("NVDA Corp")

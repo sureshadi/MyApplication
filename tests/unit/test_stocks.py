@@ -120,7 +120,7 @@ class TestPerformance:
             "2026-08-21": 115.0, "2026-10-23": 118.0, "2026-11-24": 120.0,
         }, price=120.0)
         perf = stocks.parse_performance(data)
-        assert perf == {"1M": 1.69, "3M": 4.35, "6M": 9.09, "1Y": 20.0, "2Y": 50.0, "5Y": 140.0}
+        assert perf == {"1D": 1.69, "1M": 1.69, "3M": 4.35, "6M": 9.09, "1Y": 20.0, "2Y": 50.0, "5Y": 140.0}
 
     def test_short_history_leaves_older_periods_empty(self):
         perf = stocks.parse_performance(self.chart({"2026-08-26": 10.0, "2026-11-24": 12.0}, price=12.0))
