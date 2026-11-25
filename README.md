@@ -94,9 +94,19 @@ BASE_URL=https://market-headlines.onrender.com PORTFOLIO_USER=... PORTFOLIO_PASS
 | `tests/api` | Every route: JSON shape, caching, error codes, empty states, HTML escaping |
 | `tests/e2e` | Playwright: front page, ticker search, ticker bar (prices, add, remove, saved after reload, errors), not-found and invalid input, mobile layout, dark mode (system default, toggle, saved after reload), ticker news side panel, market research tabs (one tab per company with a risk dot, arrow keys, risks first, key number tiles, "Show" for all fundamentals, add/remove, phone layout), period picker (badges, research comparisons, saved choice, arrow keys, phone fit), Portfolio sign-in (`test_login.py`, with a `LoginPage` page object in `tests/e2e/pages/`: correct sign-in, wrong username or password, empty fields, redirects, sign out, lockout after 5 wrong tries, staying signed in, phone and dark mode) |
 
+### Code coverage
+
+One command runs the unit, API and browser tests with coverage and combines them into a single report:
+
+```bash
+./scripts/coverage.sh
+```
+
+It prints the total and a per-file table with the lines and branches no test reaches, and writes a browsable report to `coverage-report/html/index.html` (`open coverage-report/html/index.html` on a Mac). The browser tests start the app inside the pytest process, so the server code they exercise counts too. Coverage measures the Python code in `app/` (not `app.js`), and it isn't collected for the live site runs, since the code runs on Render there.
+
 ## CI
 
 **Live site tests** (`.github/workflows/live-site-tests.yml`): run by hand from Actions → Live site tests → Run workflow. It runs the browser tests against a deployed URL (default https://market-headlines.onrender.com) using the `PORTFOLIO_USER` and `PORTFOLIO_PASSWORD` repository secrets. The lockout test is skipped there so it can't lock you out, and each test ends with a correct sign-in, which clears any wrong attempts. Against a deployed site the tests check layout and behaviour (pages render, tabs switch, the period picker changes values, dark mode toggles) instead of exact headlines and prices; tests marked `local_only` check the mocked data exactly and only run locally. Portfolio tickers are kept in each browser's localStorage and every test uses a fresh browser, so the tests never change your real portfolio.
 
-- **GitHub Actions:** `.github/workflows/tests.yml` runs unit/API tests and then browser tests on every push and pull request, and uploads JUnit results.
-- **Jenkins:** `Jenkinsfile` runs the same stages inside the official Playwright Python Docker image and publishes JUnit results.
+- **GitHub Actions:** `.github/workflows/tests.yml` runs unit/API tests and then browser tests on every push and pull request, and uploads JUnit results. A third job combines their coverage, shows the total and per-file table on the run's summary page, and uploads the HTML report as the `coverage-report` artifact.
+- **Jenkins:** `Jenkinsfile` runs the same stages inside the official Playwright Python Docker image and publishes JUnit results. It also prints the combined coverage in the console log and keeps the HTML report with the build's artifacts.

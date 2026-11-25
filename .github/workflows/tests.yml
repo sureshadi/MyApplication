@@ -17,12 +17,20 @@ jobs:
           cache: pip
           cache-dependency-path: requirements-dev.txt
       - run: pip install -r requirements-dev.txt
-      - run: pytest -v --junitxml=test-results/unit-api.xml
+      - run: pytest -v --junitxml=test-results/unit-api.xml --cov --cov-report=
+        env:
+          COVERAGE_FILE: coverage-data/unit-api.cov
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: unit-api-results
           path: test-results/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-data-unit-api
+          path: coverage-data/
+          if-no-files-found: ignore
 
   e2e:
     name: Browser tests (Playwright)
@@ -37,9 +45,54 @@ jobs:
           cache-dependency-path: requirements-dev.txt
       - run: pip install -r requirements-dev.txt
       - run: python -m playwright install --with-deps chromium
-      - run: pytest -m e2e -v --junitxml=test-results/e2e.xml --screenshot only-on-failure --output test-results/playwright
+      # The local test server runs inside pytest, so --cov also measures the server code these tests reach.
+      - run: pytest -m e2e -v --junitxml=test-results/e2e.xml --screenshot only-on-failure --output test-results/playwright --cov --cov-report=
+        env:
+          COVERAGE_FILE: coverage-data/e2e.cov
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: e2e-results
           path: test-results/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-data-e2e
+          path: coverage-data/
+          if-no-files-found: ignore
+
+  coverage:
+    name: Combined coverage report
+    runs-on: ubuntu-latest
+    needs: [unit-and-api, e2e]
+    # Report whatever coverage was collected, even when some tests failed.
+    if: ${{ !cancelled() }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "coverage>=7.5"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-data-*
+          path: coverage-data/
+          merge-multiple: true
+      - run: ./scripts/coverage.sh report
+      - name: Show the report on the run page
+        if: always()
+        run: |
+          if [ -f coverage-report/summary.md ]; then
+            cat coverage-report/summary.md >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Download the **coverage-report** artifact and open \`html/index.html\` for the line-by-line view." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: |
+            coverage-report/html/
+            coverage-report/coverage.xml
+            coverage-report/summary.md
+          if-no-files-found: ignore
