@@ -6,7 +6,7 @@ A small web app that:
 - has a left sidebar to pick one news source (WSJ, NYT, CNBC, FT) or all of them; on phones it becomes a row of pills
 - has a top ticker bar with live prices for AAPL, META, NVDA, AMAT, AVGO, LLY, GOOGL and MSFT. Visitors can add tickers with **+** and remove them with **×**; their list is saved in their browser
 - given a ticker symbol (for example `AAPL`), shows the current quote, the change on the day, a one-month price chart and related headlines
-- has a **Portfolio** tab with live prices for every ticker. A **1M / 3M / 6M / 1Y / 2Y / 5Y** picker sets each card's price change badge and what the research compares with (saved in the browser). Clicking a ticker opens a side panel with that company's top 3 headlines
+- has a **Portfolio** tab with live prices for every ticker. A **1D / 1M / 3M / 6M / 1Y / 2Y / 5Y** picker (default 1D, today's change) sets each card's price change badge and what the research compares with (saved in the browser). Clicking a ticker opens a side panel with that company's top 3 headlines
 - runs a **market research agent** for every company in the Portfolio, following the financial-report-analysis method: it reads the latest 10-K/10-Q figures from SEC EDGAR, compares them with the same period a year earlier (or a quarter, two quarters, two or five years earlier, from the picker; companies report quarterly, so 1M uses the prior quarter), and shows **risks and red flags first**, then the headline, a key metrics table (revenue, margins, net income, EPS, cash flow, free cash flow, cash, debt, buybacks, dividends), what drove the results, guidance and sources. With `ANTHROPIC_API_KEY` set, Claude writes the drivers, guidance and extra risks from the figures and recent headlines; without it the analysis is rule-based. Each company gets its own tab with a risk-level dot, so you read one analysis at a time: risks first, four key number tiles, and a "Show" section with all fundamentals, drivers, guidance and sources. It is factual analysis only, not financial advice
 - has a light/dark mode toggle in the header on every page. It follows the system setting until the visitor picks one, then remembers that choice in their browser
 
@@ -61,8 +61,8 @@ News feeds are listed in `app/config.py`.
 | `/api/quotes?symbols=AAPL,MSFT` | Quotes for the ticker bar (defaults to `WATCHLIST`). Unknown symbols come back with `"error": "not_found"` |
 | `/api/ticker/{symbol}` | Quote and news as JSON (400 invalid, 404 unknown, 503 provider down) |
 | `/api/ticker/{symbol}/news?limit=3` | Top headlines for one company (the Portfolio side panel) |
-| `/api/performance?symbols=AAPL,MSFT` | Price change over 1M, 3M, 6M, 1Y, 2Y and 5Y for each symbol (Yahoo Finance daily history) |
-| `/api/research/{symbol}?period=1Y` | Market research (`period` is 1M, 3M, 6M, 1Y, 2Y or 5Y): risks, key metrics, drivers, guidance, sources (404 when the company has no SEC filings, 503 when EDGAR is down) |
+| `/api/performance?symbols=AAPL,MSFT` | Current price and its change over 1D, 1M, 3M, 6M, 1Y, 2Y and 5Y for each symbol (Yahoo Finance daily history) |
+| `/api/research/{symbol}?period=1D` | Market research (`period` is 1D, 1M, 3M, 6M, 1Y, 2Y or 5Y; 1D compares the figures with a year earlier): risks, key metrics, drivers, guidance, sources (404 when the company has no SEC filings, 503 when EDGAR is down) |
 | `/healthz` | Health check |
 
 ## Tests

@@ -104,7 +104,7 @@ class Fact:
 class Comparison:
     """What the figures are compared with for one Portfolio period choice."""
 
-    key: str  # 1M, 3M, 6M, 1Y, 2Y, 5Y
+    key: str  # 1D, 1M, 3M, 6M, 1Y, 2Y, 5Y
     months: int  # how far back the comparison filing is (filings are quarterly, so never under 3)
     label: str  # column heading, e.g. "Prior quarter"
     phrase: str  # e.g. "year over year"
@@ -117,6 +117,8 @@ class Comparison:
 
 
 COMPARISONS = {
+    # Filings don't change day to day, so 1D compares the figures with a year earlier.
+    "1D": Comparison("1D", 12, "Prior year", "year over year", "a year earlier", "1 day"),
     "1M": Comparison("1M", 3, "Prior quarter", "quarter over quarter", "a quarter earlier", "1 month"),
     "3M": Comparison("3M", 3, "Prior quarter", "quarter over quarter", "a quarter earlier", "3 months"),
     "6M": Comparison("6M", 6, "2 quarters ago", "versus two quarters earlier", "two quarters earlier", "6 months"),

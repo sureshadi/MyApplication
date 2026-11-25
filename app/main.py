@@ -133,8 +133,8 @@ def create_app(settings: Settings | None = None, analyst_factory=research.defaul
             cache.set(f"quote:{symbol}", quote)
         return quote
 
-    async def cached_performance(request: Request, symbol: str) -> dict[str, float | None]:
-        """Price change over 1M..5Y for a normalized symbol, cached. Raises QuoteNotFound / QuoteUnavailable."""
+    async def cached_performance(request: Request, symbol: str) -> dict:
+        """Price and its change over 1D..5Y for a normalized symbol, cached. Raises QuoteNotFound / QuoteUnavailable."""
         cache: TTLCache = request.app.state.performance_cache
         perf = cache.get(f"perf:{symbol}")
         if perf is None:
@@ -325,7 +325,7 @@ def create_app(settings: Settings | None = None, analyst_factory=research.defaul
 
     @app.get("/api/performance")
     async def api_performance(request: Request, symbols: str):
-        """Price change over 1M, 3M, 6M, 1Y, 2Y and 5Y for each symbol (the Portfolio period picker)."""
+        """Price and its change over 1D, 1M, 3M, 6M, 1Y, 2Y and 5Y for each symbol (the Portfolio period picker)."""
         try:
             wanted = stocks.parse_symbol_list(symbols, settings.max_quote_symbols)
         except stocks.InvalidSymbol as exc:
@@ -333,13 +333,14 @@ def create_app(settings: Settings | None = None, analyst_factory=research.defaul
 
         async def one(symbol: str) -> dict:
             try:
-                return {"symbol": symbol, "changes": await cached_performance(request, symbol), "error": None}
+                perf = await cached_performance(request, symbol)
+                return {"symbol": symbol, "price": perf["price"], "changes": perf["changes"], "error": None}
             except stocks.QuoteNotFound:
-                return {"symbol": symbol, "changes": None, "error": "not_found"}
+                return {"symbol": symbol, "price": None, "changes": None, "error": "not_found"}
             except stocks.QuoteUnavailable:
-                return {"symbol": symbol, "changes": None, "error": "unavailable"}
+                return {"symbol": symbol, "price": None, "changes": None, "error": "unavailable"}
 
-        return {"periods": list(stocks.PERIOD_MONTHS), "performance": await asyncio.gather(*(one(s) for s in wanted))}
+        return {"periods": list(stocks.PERIODS), "performance": await asyncio.gather(*(one(s) for s in wanted))}
 
     @app.get("/api/ticker/{symbol}")
     async def api_ticker(request: Request, symbol: str):
@@ -379,10 +380,11 @@ def create_app(settings: Settings | None = None, analyst_factory=research.defaul
         return data
 
     @app.get("/api/research/{symbol}")
-    async def api_research(request: Request, symbol: str, period: str = "1Y"):
+    async def api_research(request: Request, symbol: str, period: str = "1D"):
         """Market research for one company: risks first, then fundamentals, drivers and guidance.
 
-        `period` (1M, 3M, 6M, 1Y, 2Y, 5Y) sets what the figures are compared with and the share price window.
+        `period` (1D, 1M, 3M, 6M, 1Y, 2Y, 5Y) sets what the figures are compared with and the share price window.
+        1D compares the figures with a year earlier and uses today's price move.
         """
         try:
             normalized = stocks.normalize_symbol(symbol)
@@ -398,7 +400,7 @@ def create_app(settings: Settings | None = None, analyst_factory=research.defaul
 
         price_change = None
         try:
-            change = (await cached_performance(request, normalized)).get(period)
+            change = (await cached_performance(request, normalized))["changes"].get(period)
             price_change = round(change, 1) if change is not None else None
         except (stocks.QuoteNotFound, stocks.QuoteUnavailable):
             pass
